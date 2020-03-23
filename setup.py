@@ -14,7 +14,7 @@ def read(fname):
 
 setup(
     name="pytest-asyncio-cooperative",
-    version="0.1.0",
+    version="0.1.1",
     author="Willem Thiart",
     author_email="himself@willemthiart.com",
     maintainer="Willem Thiart",

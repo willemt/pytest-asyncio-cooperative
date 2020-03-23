@@ -222,7 +222,6 @@ def pytest_runtestloop(session):
             tasks = list(pending)
 
             for result in done:
-                print(result)
                 item = item_by_coro[result._coro]
                 item.runtest = lambda: result.result()
                 item.ihook.pytest_runtest_protocol(item=item, nextitem=None)
