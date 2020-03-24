@@ -5,6 +5,10 @@ import time
 import pytest
 
 
+def pytest_configure(config):
+    config.addinivalue_line("markers", "asyncio_cooperative: run an async test cooperatively with other async tests.")
+
+
 @pytest.hookspec
 def pytest_runtest_makereport(item, call):
     # Tests are run outside of the normal place, so we have to inject our timings
