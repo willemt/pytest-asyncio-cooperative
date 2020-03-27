@@ -5,6 +5,15 @@ import time
 import pytest
 
 
+def pytest_addoption(parser):
+    parser.addoption(
+        "--max-asyncio-tasks",
+        action="store",
+        default=100,
+        help="asyncio: maximum number of tasks to run concurrently (int)",
+    )
+
+
 def pytest_configure(config):
     config.addinivalue_line("markers", "asyncio_cooperative: run an async test cooperatively with other async tests.")
 
@@ -217,7 +226,10 @@ def pytest_runtestloop(session):
         else:
             regular_items.append(item)
 
-    async def run_tests(tasks):
+    async def run_tests(tasks, max_tasks):
+        sidelined_tasks = tasks[max_tasks:]
+        tasks = tasks[:max_tasks]
+
         completed = []
         while tasks:
             done, pending = await asyncio.wait(
@@ -230,6 +242,8 @@ def pytest_runtestloop(session):
                 item.runtest = lambda: result.result()
                 item.ihook.pytest_runtest_protocol(item=item, nextitem=None)
 
+            if sidelined_tasks:
+                tasks.append(sidelined_tasks.pop(0))
             completed.extend(done)
 
         return completed
@@ -237,7 +251,7 @@ def pytest_runtestloop(session):
     # Run the tests using cooperative multitasking
     loop = asyncio.new_event_loop()
     try:
-        task = run_tests(tasks)
+        task = run_tests(tasks, int(session.config.getoption("--max-asyncio-tasks")))
         loop.run_until_complete(task)
     finally:
         loop.close()
