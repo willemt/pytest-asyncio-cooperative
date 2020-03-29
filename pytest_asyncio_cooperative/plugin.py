@@ -4,6 +4,8 @@ import time
 
 import pytest
 
+from .assertion import activate_assert_rewrite
+
 
 def pytest_addoption(parser):
     parser.addoption(
@@ -241,12 +243,24 @@ def pytest_runtestloop(session):
                 item = item_by_coro[result._coro]
                 item.runtest = lambda: result.result()
                 item.ihook.pytest_runtest_protocol(item=item, nextitem=None)
+                # Hack: See rewrite comment below
+                # pytest_runttest_protocl will disable the rewrite assertion
+                # so we renable it here
+                activate_assert_rewrite(item)
 
             if sidelined_tasks:
                 tasks.append(sidelined_tasks.pop(0))
             completed.extend(done)
 
         return completed
+
+    # Do assert rewrite
+    # Hack: pytest's implementation sets up assert rewriting as a shared
+    # resource. This causes a race condition between async tests. Therefore we
+    # need to activate the assert rewriting here
+    if tasks:
+        item = item_by_coro[tasks[0]]
+        activate_assert_rewrite(item)
 
     # Run the tests using cooperative multitasking
     loop = asyncio.new_event_loop()
@@ -255,5 +269,10 @@ def pytest_runtestloop(session):
         loop.run_until_complete(task)
     finally:
         loop.close()
+
+    # Hack: because we might be running synchronous tests later (ie.
+    # regular_items) we to set this to zero otherwise pytest bails out early
+    if session.testsfailed:
+        session.testsfailed = 0
 
     session.items = regular_items
