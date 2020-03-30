@@ -272,7 +272,8 @@ def pytest_runtestloop(session):
 
     # Hack: because we might be running synchronous tests later (ie.
     # regular_items) we to set this to zero otherwise pytest bails out early
-    if session.testsfailed:
-        session.testsfailed = 0
+    # NOTE: this doesn't work, the return code is not non-negative
+    # if session.testsfailed:
+    #     session.testsfailed = 0
 
     session.items = regular_items
