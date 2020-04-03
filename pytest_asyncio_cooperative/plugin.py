@@ -1,4 +1,5 @@
 import asyncio
+import functools
 import inspect
 import time
 
@@ -207,6 +208,43 @@ async def test_wrapper(item):
     item.stop_teardown = time.time()
 
 
+async def hypothesis_test_wrapper(item):
+    """
+    Hypothesis is synchronous, let's run inside an executor to keep asynchronicity
+    """
+
+    # Do setup
+    item.start_setup = time.time()
+    fixture_values, teardowns = await fill_fixtures(item)
+    item.stop_setup = time.time()
+
+    default_loop = asyncio.get_running_loop()
+    inner_test = item.function.hypothesis.inner_test
+
+    def async_to_sync(*args, **kwargs):
+        # FIXME: can we cache this loop across multiple runs?
+        loop = asyncio.new_event_loop()
+        task = inner_test(*args, **kwargs)
+        try:
+            loop.run_until_complete(task)
+        finally:
+            loop.close()
+
+    # Run test
+    item.function.hypothesis.inner_test = async_to_sync
+    wrapped_func_with_fixtures = functools.partial(item.function, *fixture_values)
+    await default_loop.run_in_executor(None, wrapped_func_with_fixtures)
+
+    # Do teardowns
+    item.start_teardown = time.time()
+    for teardown in teardowns:
+        try:
+            await teardown.__anext__()
+        except StopAsyncIteration:
+            pass
+    item.stop_teardown = time.time()
+
+
 @pytest.hookspec
 def pytest_runtestloop(session):
     session.wrapped_fixtures = {}
@@ -217,14 +255,20 @@ def pytest_runtestloop(session):
     tasks = []
     for item in session.items:
         markers = [m.name for m in item.own_markers]
+
+        # Coerce into a task
         if "asyncio_cooperative" in markers:
             if inspect.iscoroutinefunction(item.function):
                 task = test_wrapper(item)
-                item_by_coro[task] = item
-                tasks.append(task)
+            elif getattr(item.function, "is_hypothesis_test", False):
+                task = hypothesis_test_wrapper(item)
             else:
                 item.runtest = not_coroutine_failure
                 item.ihook.pytest_runtest_protocol(item=item, nextitem=None)
+                continue
+
+            item_by_coro[task] = item
+            tasks.append(task)
         else:
             regular_items.append(item)
 
