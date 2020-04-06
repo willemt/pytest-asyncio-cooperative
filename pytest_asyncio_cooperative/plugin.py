@@ -256,6 +256,9 @@ def pytest_runtestloop(session):
     for item in session.items:
         markers = [m.name for m in item.own_markers]
 
+        if "skip" in markers:
+            continue
+
         # Coerce into a task
         if "asyncio_cooperative" in markers:
             if inspect.iscoroutinefunction(item.function):
