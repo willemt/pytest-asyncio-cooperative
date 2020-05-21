@@ -19,6 +19,7 @@ def pytest_addoption(parser):
 
 def pytest_configure(config):
     config.addinivalue_line("markers", "asyncio_cooperative: run an async test cooperatively with other async tests.")
+    config.addinivalue_line("markers", "flakey: if this test fails then run it one more time.")
 
 
 @pytest.hookspec
@@ -245,9 +246,33 @@ async def hypothesis_test_wrapper(item):
     item.stop_teardown = time.time()
 
 
+class NotCoroutine(Exception):
+    pass
+
+
+def item_to_task(item):
+    if inspect.iscoroutinefunction(item.function):
+        return test_wrapper(item)
+    elif getattr(item.function, "is_hypothesis_test", False):
+        return hypothesis_test_wrapper(item)
+    else:
+        raise NotCoroutine
+
+
+def _run_test_loop(tasks, session, run_tests):
+    loop = asyncio.new_event_loop()
+    try:
+        task = run_tests(tasks, int(session.config.getoption("--max-asyncio-tasks")))
+        loop.run_until_complete(task)
+    finally:
+        loop.close()
+
+
 @pytest.hookspec
 def pytest_runtestloop(session):
     session.wrapped_fixtures = {}
+
+    flakes_to_retry = []
 
     # Collect our coroutines
     regular_items = []
@@ -261,15 +286,14 @@ def pytest_runtestloop(session):
 
         # Coerce into a task
         if "asyncio_cooperative" in markers:
-            if inspect.iscoroutinefunction(item.function):
-                task = test_wrapper(item)
-            elif getattr(item.function, "is_hypothesis_test", False):
-                task = hypothesis_test_wrapper(item)
-            else:
+            try:
+                task = item_to_task(item)
+            except NotCoroutine:
                 item.runtest = not_coroutine_failure
                 item.ihook.pytest_runtest_protocol(item=item, nextitem=None)
                 continue
 
+            item._flakey = "flakey" in markers
             item_by_coro[task] = item
             tasks.append(task)
         else:
@@ -288,6 +312,19 @@ def pytest_runtestloop(session):
 
             for result in done:
                 item = item_by_coro[result._coro]
+
+                # Flakey tests will be run again if they failed
+                # TODO: add retry count
+                if item._flakey:
+                    try:
+                        result.result()
+                    except:
+                        item._flakey = None
+                        new_task = item_to_task(item)
+                        flakes_to_retry.append(new_task)
+                        item_by_coro[new_task] = item
+                        continue
+
                 item.runtest = lambda: result.result()
                 item.ihook.pytest_runtest_protocol(item=item, nextitem=None)
                 # Hack: See rewrite comment below
@@ -295,9 +332,10 @@ def pytest_runtestloop(session):
                 # so we renable it here
                 activate_assert_rewrite(item)
 
+                completed.append(result)
+
             if sidelined_tasks:
                 tasks.append(sidelined_tasks.pop(0))
-            completed.extend(done)
 
         return completed
 
@@ -310,12 +348,11 @@ def pytest_runtestloop(session):
         activate_assert_rewrite(item)
 
     # Run the tests using cooperative multitasking
-    loop = asyncio.new_event_loop()
-    try:
-        task = run_tests(tasks, int(session.config.getoption("--max-asyncio-tasks")))
-        loop.run_until_complete(task)
-    finally:
-        loop.close()
+    _run_test_loop(tasks, session, run_tests)
+
+    # Run failed flakey tests
+    if flakes_to_retry:
+        _run_test_loop(flakes_to_retry, session, run_tests)
 
     # Hack: because we might be running synchronous tests later (ie.
     # regular_items) we to set this to zero otherwise pytest bails out early
