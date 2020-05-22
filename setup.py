@@ -14,7 +14,7 @@ def read(fname):
 
 setup(
     name="pytest-asyncio-cooperative",
-    version="0.5.0",
+    version="0.6.0",
     author="Willem Thiart",
     author_email="himself@willemthiart.com",
     maintainer="Willem Thiart",
@@ -34,6 +34,7 @@ setup(
         "Programming Language :: Python",
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: Implementation :: CPython",
         "Programming Language :: Python :: Implementation :: PyPy",
         "Operating System :: OS Independent",

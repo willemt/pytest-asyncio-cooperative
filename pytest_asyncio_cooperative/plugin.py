@@ -18,8 +18,13 @@ def pytest_addoption(parser):
 
 
 def pytest_configure(config):
-    config.addinivalue_line("markers", "asyncio_cooperative: run an async test cooperatively with other async tests.")
-    config.addinivalue_line("markers", "flakey: if this test fails then run it one more time.")
+    config.addinivalue_line(
+        "markers",
+        "asyncio_cooperative: run an async test cooperatively with other async tests.",
+    )
+    config.addinivalue_line(
+        "markers", "flakey: if this test fails then run it one more time."
+    )
 
 
 @pytest.hookspec
@@ -50,13 +55,15 @@ def function_args(func):
     return func.__code__.co_varnames[: func.__code__.co_argcount]
 
 
-async def _fill_fixture_fixtures(_fixtureinfo, fixture):
+async def _fill_fixture_fixtures(_fixtureinfo, fixture, item):
     values = []
     all_teardowns = []
     for arg_name in function_args(fixture.func):
         assert len(_fixtureinfo.name2fixturedefs[arg_name]) == 1
         dep_fixture = _fixtureinfo.name2fixturedefs[arg_name][0]
-        value, teardowns = await fill_fixture_fixtures(_fixtureinfo, dep_fixture)
+        value, teardowns = await fill_fixture_fixtures(
+            _fixtureinfo, dep_fixture, item
+        )
         values.append(value)
         all_teardowns.extend(teardowns)
     return values, all_teardowns
@@ -131,12 +138,14 @@ class CachedAsyncGen(CachedFunction):
                 return self.value
 
 
-async def fill_fixture_fixtures(_fixtureinfo, fixture):
+async def fill_fixture_fixtures(_fixtureinfo, fixture, item):
 
     if inspect.isasyncgenfunction(fixture.func) or isinstance(
         fixture.func, CachedAsyncGen
     ):
-        fixture_values, teardowns = await _fill_fixture_fixtures(_fixtureinfo, fixture)
+        fixture_values, teardowns = await _fill_fixture_fixtures(
+            _fixtureinfo, fixture, item
+        )
 
         # Cache the module call
         if fixture.scope in ["module"]:
@@ -150,7 +159,9 @@ async def fill_fixture_fixtures(_fixtureinfo, fixture):
     elif inspect.iscoroutinefunction(fixture.func) or isinstance(
         fixture.func, CachedFunction
     ):
-        fixture_values, teardowns = await _fill_fixture_fixtures(_fixtureinfo, fixture)
+        fixture_values, teardowns = await _fill_fixture_fixtures(
+            _fixtureinfo, fixture, item
+        )
 
         # Cache the module call
         if fixture.scope in ["module"]:
@@ -159,6 +170,13 @@ async def fill_fixture_fixtures(_fixtureinfo, fixture):
 
         value = await fixture.func(*fixture_values)
         return value, teardowns
+
+    # It's a parameterization
+    elif fixture.params:
+        request = item._request
+        request.param = item.callspec.params["number"]
+        val = fixture.func(request)
+        return val, []
 
     else:
         raise Exception(
@@ -178,7 +196,9 @@ async def fill_fixtures(item):
         if fixture.scope not in ["function", "module"]:
             raise Exception(f"{fixture.scope} scope not supported")
 
-        value, teardowns2 = await fill_fixture_fixtures(item._fixtureinfo, fixture)
+        value, teardowns2 = await fill_fixture_fixtures(
+            item._fixtureinfo, fixture, item
+        )
         teardowns.extend(teardowns2)
         fixture_values.append(value)
 
@@ -209,6 +229,7 @@ async def test_wrapper(item):
     item.stop_teardown = time.time()
 
 
+# TODO: move to hypothesis module
 async def hypothesis_test_wrapper(item):
     """
     Hypothesis is synchronous, let's run inside an executor to keep asynchronicity
