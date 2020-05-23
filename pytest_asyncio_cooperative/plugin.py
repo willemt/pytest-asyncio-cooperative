@@ -174,7 +174,14 @@ async def fill_fixture_fixtures(_fixtureinfo, fixture, item):
         value = await fixture.func(*fixture_values)
         return value, teardowns
 
+    # Regular fixture
+    # FIXME: we should use more of pytest's fixture system
+    elif inspect.isgeneratorfunction(fixture.func):
+        gen = fixture.func()
+        return gen.__next__(), [gen]
+
     # It's a parameterization
+    # FIXME: we should use more of pytest's fixture system
     elif fixture.params:
         request = item._request
         request.param = item.callspec.params["number"]
@@ -183,8 +190,8 @@ async def fill_fixture_fixtures(_fixtureinfo, fixture, item):
 
     else:
         raise Exception(
-            f"Provided a fixture '{fixture.func.__name__}' that is not a coroutine.\n"
-            "Remove the fixture or add the 'async' keyword to the fixture"
+            f"Something is strange about the fixture '{fixture.func.__name__}'.\n"
+            f"Please create an issue with reproducible sample on github."
         )
 
 
@@ -225,10 +232,16 @@ async def test_wrapper(item):
     # Do teardowns
     item.start_teardown = time.time()
     for teardown in teardowns:
-        try:
-            await teardown.__anext__()
-        except StopAsyncIteration:
-            pass
+        if inspect.isgenerator(teardown):
+            try:
+                teardown.__next__()
+            except StopIteration:
+                pass
+        else:
+            try:
+                await teardown.__anext__()
+            except StopAsyncIteration:
+                pass
     item.stop_teardown = time.time()
 
 

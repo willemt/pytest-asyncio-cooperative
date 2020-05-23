@@ -35,3 +35,29 @@ def test_fixtures(testdir):
     result = testdir.runpytest()
 
     result.assert_outcomes(passed=2)
+
+
+def test_synchronous_fixture(testdir):
+    testdir.makeconftest("""""")
+
+    testdir.makepyfile(
+        """
+        import asyncio
+        import pytest
+
+
+        @pytest.fixture
+        def my_fixture():
+            yield "YYY"
+
+
+        @pytest.mark.asyncio_cooperative
+        async def test_a(my_fixture):
+            await asyncio.sleep(2)
+            assert my_fixture == "YYY"
+    """
+    )
+
+    result = testdir.runpytest()
+
+    result.assert_outcomes(passed=1)
