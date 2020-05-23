@@ -47,8 +47,11 @@ def pytest_runtest_makereport(item, call):
             call.stop = item.stop_teardown
 
 
-def not_coroutine_failure(*args, **kwargs):
-    raise Exception("is not a coroutine. Add the async keyword to make it one")
+def not_coroutine_failure(function_name: str, *args, **kwargs):
+    raise Exception(
+        f"Function {function_name} is not a coroutine.\n"
+        f"Tests with the `@pytest.mark.asyncio_cooperative` mark MUST be coroutines.\n"
+        f"Please add the `async` keyword to the test function.")
 
 
 def function_args(func):
@@ -310,7 +313,7 @@ def pytest_runtestloop(session):
             try:
                 task = item_to_task(item)
             except NotCoroutine:
-                item.runtest = not_coroutine_failure
+                item.runtest = functools.partial(not_coroutine_failure, item.name)
                 item.ihook.pytest_runtest_protocol(item=item, nextitem=None)
                 continue
 
