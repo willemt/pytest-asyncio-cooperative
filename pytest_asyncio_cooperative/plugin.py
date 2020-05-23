@@ -183,9 +183,8 @@ async def fill_fixture_fixtures(_fixtureinfo, fixture, item):
     # It's a parameterization
     # FIXME: we should use more of pytest's fixture system
     elif fixture.params:
-        param_name = _fixtureinfo.argnames[0]
         request = item._request
-        request.param = item._pyfuncitem.callspec.params[param_name]
+        request.param = item._pyfuncitem.callspec.params[fixture.argname]
         val = fixture.func(request)
         return val, []
 

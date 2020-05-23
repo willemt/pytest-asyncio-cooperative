@@ -1,4 +1,4 @@
-def test_single(testdir):
+def test_one_test(testdir):
     testdir.makeconftest("""""")
 
     testdir.makepyfile(
@@ -18,7 +18,7 @@ def test_single(testdir):
     result.assert_outcomes(passed=1)
 
 
-def test_double(testdir):
+def test_two_tests(testdir):
     testdir.makeconftest("""""")
 
     testdir.makepyfile(
@@ -44,7 +44,7 @@ def test_double(testdir):
     assert result.duration < 4
 
 
-def test_works_with_synchronous(testdir):
+def test_plays_nicely_with_synchronous_test(testdir):
     testdir.makeconftest("""""")
 
     testdir.makepyfile(
