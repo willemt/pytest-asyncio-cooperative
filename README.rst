@@ -34,6 +34,10 @@ Quickstart
    pip install pytest-asyncio-cooperative
 
 
+Compatibility
+-------------
+pytest-asyncio is NOT compatible with this plugin. Please uninstall pytest-asyncio or pass this flag to pytest `-p no:asyncio`
+
 Goals
 -----
 

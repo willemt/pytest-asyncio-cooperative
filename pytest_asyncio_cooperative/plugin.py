@@ -307,6 +307,13 @@ def _run_test_loop(tasks, session, run_tests):
 
 @pytest.hookspec
 def pytest_runtestloop(session):
+    plugin = session.config.pluginmanager.get_plugin("asyncio")
+    if plugin:
+        raise Exception(
+            "pytest-asyncio-cooperative is NOT compatible with pytest-asyncio\n"
+            "Uninstall pytest-asyncio or pass this option to pytest: `-p no:asyncio`\n"
+        )
+
     session.wrapped_fixtures = {}
 
     flakes_to_retry = []
