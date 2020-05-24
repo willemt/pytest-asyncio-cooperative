@@ -187,6 +187,11 @@ async def fill_fixture_fixtures(_fixtureinfo, fixture, item):
         val = fixture.func(request)
         return val, []
 
+    # FIXME: we should use more of pytest's fixture system
+    elif inspect.isfunction(fixture.func):
+        val = fixture.func()
+        return val, []
+
     else:
         raise Exception(
             f"Something is strange about the fixture '{fixture.func.__name__}'.\n"
