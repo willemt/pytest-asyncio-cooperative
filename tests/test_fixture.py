@@ -61,3 +61,27 @@ def test_synchronous_fixture(testdir):
     result = testdir.runpytest()
 
     result.assert_outcomes(passed=1)
+
+
+def test_prefer_user_fixture_over_plugin_fixture(testdir):
+    testdir.makepyfile(
+        """
+        import asyncio
+        import pytest
+
+
+        @pytest.fixture
+        def cache():
+            yield "YYY"
+
+
+        @pytest.mark.asyncio_cooperative
+        async def test_a(cache):
+            await asyncio.sleep(2)
+            assert cache == "YYY"
+    """
+    )
+
+    result = testdir.runpytest()
+
+    result.assert_outcomes(passed=1)

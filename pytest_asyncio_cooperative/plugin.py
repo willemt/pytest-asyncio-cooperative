@@ -51,7 +51,8 @@ def not_coroutine_failure(function_name: str, *args, **kwargs):
     raise Exception(
         f"Function {function_name} is not a coroutine.\n"
         f"Tests with the `@pytest.mark.asyncio_cooperative` mark MUST be coroutines.\n"
-        f"Please add the `async` keyword to the test function.")
+        f"Please add the `async` keyword to the test function."
+    )
 
 
 def function_args(func):
@@ -62,11 +63,9 @@ async def _fill_fixture_fixtures(_fixtureinfo, fixture, item):
     values = []
     all_teardowns = []
     for arg_name in function_args(fixture.func):
-        assert len(_fixtureinfo.name2fixturedefs[arg_name]) == 1
-        dep_fixture = _fixtureinfo.name2fixturedefs[arg_name][0]
-        value, teardowns = await fill_fixture_fixtures(
-            _fixtureinfo, dep_fixture, item
-        )
+        dep_fixture = _get_fixture(_fixtureinfo, arg_name)
+
+        value, teardowns = await fill_fixture_fixtures(_fixtureinfo, dep_fixture, item)
         values.append(value)
         all_teardowns.extend(teardowns)
     return values, all_teardowns
@@ -195,13 +194,22 @@ async def fill_fixture_fixtures(_fixtureinfo, fixture, item):
         )
 
 
+def _get_fixture(_fixtureinfo, arg_name):
+    """
+    Sometimes fixture names clash with plugin fixtures.
+    We priortise fixtures that are defined inside the user's module
+    """
+    fixtures = sorted(
+        _fixtureinfo.name2fixturedefs[arg_name], key=lambda x: not x.has_location
+    )
+    return fixtures[0]
+
+
 async def fill_fixtures(item):
     fixture_values = []
     teardowns = []
     for arg_name in function_args(item.function):
-        # FIXME: not sure how to handle duplicate fixture names
-        assert len(item._fixtureinfo.name2fixturedefs[arg_name]) == 1
-        fixture = item._fixtureinfo.name2fixturedefs[arg_name][0]
+        fixture = _get_fixture(item._fixtureinfo, arg_name)
 
         if fixture.scope not in ["function", "module"]:
             raise Exception(f"{fixture.scope} scope not supported")
