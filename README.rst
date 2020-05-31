@@ -38,6 +38,30 @@ Compatibility
 -------------
 pytest-asyncio is NOT compatible with this plugin. Please uninstall pytest-asyncio or pass this flag to pytest `-p no:asyncio`
 
+Fixtures
+--------
+It's recommended that async tests use async fixtures.
+
+.. code-block:: bash
+   :class: ignore
+
+   import asyncio
+   import pytest
+
+
+   @pytest.fixture
+   async def my_fixture():
+       await asyncio.sleep(2)
+       yield "XXX"
+       await asyncio.sleep(2)
+
+
+   @pytest.mark.asyncio_cooperative
+   async def test_a(my_fixture):
+       await asyncio.sleep(2)
+       assert my_fixture == "XXX"
+
+
 Goals
 -----
 
@@ -67,5 +91,6 @@ Cons
 Known Issues
 ------------
 
-*Synchronous tests fail to run when async tests fail*
-Async tests are run BEFORE synchronous tests. If an async test fails then synchronous tests will NOT run. Therefore the synchronous tests will not report to have passed or failed. It's recommended that if you are using asyncio-cooperative, then you should use `async` for ALL fixtures.
+**Synchronous tests fail to run when async tests fail**
+
+Async tests are run BEFORE synchronous tests. If an async test fails then synchronous tests will NOT run. Therefore the synchronous tests will not report to have passed or failed.
