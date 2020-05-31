@@ -176,8 +176,11 @@ async def fill_fixture_fixtures(_fixtureinfo, fixture, item):
     # Regular fixture
     # FIXME: we should use more of pytest's fixture system
     elif inspect.isgeneratorfunction(fixture.func):
-        gen = fixture.func()
-        return gen.__next__(), [gen]
+        fixture_values, teardowns = await _fill_fixture_fixtures(
+            _fixtureinfo, fixture, item
+        )
+        gen = fixture.func(*fixture_values)
+        return gen.__next__(), teardowns + [gen]
 
     # It's a parameterization
     # FIXME: we should use more of pytest's fixture system
@@ -189,8 +192,11 @@ async def fill_fixture_fixtures(_fixtureinfo, fixture, item):
 
     # FIXME: we should use more of pytest's fixture system
     elif inspect.isfunction(fixture.func):
-        val = fixture.func()
-        return val, []
+        fixture_values, teardowns = await _fill_fixture_fixtures(
+            _fixtureinfo, fixture, item
+        )
+        val = fixture.func(*fixture_values)
+        return val, teardowns
 
     else:
         raise Exception(

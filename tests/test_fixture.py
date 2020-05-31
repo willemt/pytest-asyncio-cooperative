@@ -61,6 +61,61 @@ def test_synchronous_generator_fixture(testdir):
     result.assert_outcomes(passed=1)
 
 
+def test_synchronous_generator_fixture_with_parent(testdir):
+    testdir.makepyfile(
+        """
+        import asyncio
+        import pytest
+
+        @pytest.fixture
+        def grandparent_fixture():
+            yield "YYY"
+
+
+        @pytest.fixture
+        def my_fixture(grandparent_fixture):
+            yield "XXX"
+
+
+        @pytest.mark.asyncio_cooperative
+        async def test_a(my_fixture):
+            await asyncio.sleep(2)
+    """
+    )
+
+    result = testdir.runpytest()
+
+    result.assert_outcomes(passed=1)
+
+
+def test_synchronous_fixture_with_parent(testdir):
+    testdir.makepyfile(
+        """
+        import asyncio
+        import pytest
+
+        @pytest.fixture
+        def grandparent_fixture():
+            return "YYY"
+
+
+        @pytest.fixture
+        def my_fixture(grandparent_fixture):
+            return "XXX"
+
+
+        @pytest.mark.asyncio_cooperative
+        async def test_a(my_fixture):
+            await asyncio.sleep(2)
+    """
+    )
+
+    result = testdir.runpytest()
+
+    result.assert_outcomes(passed=1)
+
+
+
 def test_synchronous_fixture(testdir):
     testdir.makepyfile(
         """
