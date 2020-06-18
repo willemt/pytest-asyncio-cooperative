@@ -150,7 +150,7 @@ async def fill_fixture_fixtures(_fixtureinfo, fixture, item):
         )
 
         # Cache the module call
-        if fixture.scope in ["module"]:
+        if fixture.scope in ["module", "session"]:
             if not isinstance(fixture.func, CachedAsyncGen):
                 fixture.func = CachedAsyncGen(fixture.func)
 
@@ -166,7 +166,7 @@ async def fill_fixture_fixtures(_fixtureinfo, fixture, item):
         )
 
         # Cache the module call
-        if fixture.scope in ["module"]:
+        if fixture.scope in ["module", "session"]:
             if not isinstance(fixture.func, CachedFunction):
                 fixture.func = CachedFunction(fixture.func)
 
@@ -222,7 +222,7 @@ async def fill_fixtures(item):
     for arg_name in function_args(item.function):
         fixture = _get_fixture(item._fixtureinfo, arg_name)
 
-        if fixture.scope not in ["function", "module"]:
+        if fixture.scope not in ["function", "module", "session"]:
             raise Exception(f"{fixture.scope} scope not supported")
 
         value, teardowns2 = await fill_fixture_fixtures(
