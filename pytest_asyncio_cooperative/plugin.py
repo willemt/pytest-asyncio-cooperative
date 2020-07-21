@@ -15,6 +15,12 @@ def pytest_addoption(parser):
         default=100,
         help="asyncio: maximum number of tasks to run concurrently (int)",
     )
+    parser.addoption(
+        "--asyncio-task-timeout",
+        action="store",
+        default=120,
+        help="asyncio: number of seconds before a test will be cancelled (int)",
+    )
 
 
 def pytest_configure(config):
@@ -365,12 +371,32 @@ def pytest_runtestloop(session):
         sidelined_tasks = tasks[max_tasks:]
         tasks = tasks[:max_tasks]
 
+        task_timeout = int(session.config.getoption("--asyncio-task-timeout"))
+
         completed = []
         while tasks:
+
+            # Mark when the task was started
+            for task in tasks:
+                if isinstance(task, asyncio.Task):
+                    item = item_by_coro[task._coro]
+                else:
+                    item = item_by_coro[task]
+                if not hasattr(item, "enqueue_time"):
+                    item.enqueue_time = time.time()
+
             done, pending = await asyncio.wait(
-                tasks, return_when=asyncio.FIRST_COMPLETED
+                tasks, return_when=asyncio.FIRST_COMPLETED, timeout=30
             )
-            tasks = list(pending)
+
+            # Cancel tasks that have taken too long
+            tasks = []
+            for task in pending:
+                now = time.time()
+                item = item_by_coro[task._coro]
+                if task_timeout < now - item.enqueue_time:
+                    task.cancel()
+                tasks.append(task)
 
             for result in done:
                 item = item_by_coro[result._coro]
