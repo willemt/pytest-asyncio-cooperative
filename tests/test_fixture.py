@@ -1,3 +1,61 @@
+def test_function_fixture(testdir):
+    testdir.makepyfile(
+        """
+        import asyncio
+        import uuid
+        import pytest
+
+        @pytest.fixture
+        async def grandparent_fixture():
+            return str(uuid.uuid4())
+
+
+        @pytest.fixture
+        async def my_fixture(grandparent_fixture):
+            return grandparent_fixture
+
+
+        @pytest.mark.asyncio_cooperative
+        async def test_a(my_fixture, grandparent_fixture):
+            assert my_fixture == grandparent_fixture
+    """
+    )
+
+    result = testdir.runpytest()
+
+    result.assert_outcomes(passed=1)
+
+
+def test_request(testdir):
+    testdir.makepyfile(
+        """
+        import pytest
+
+        @pytest.mark.asyncio_cooperative
+        async def test_a(request):
+            assert request is not None
+    """
+    )
+
+    result = testdir.runpytest()
+    result.assert_outcomes(passed=1)
+
+
+def test_tmp_path(testdir):
+    testdir.makepyfile(
+        """
+        import pytest
+
+        @pytest.mark.asyncio_cooperative
+        async def test_a(tmp_path):
+            assert isinstance(str(tmp_path), str)
+    """
+    )
+
+    result = testdir.runpytest()
+    result.assert_outcomes(passed=1)
+
+
 def test_fixtures(testdir):
     testdir.makeconftest("""""")
 
