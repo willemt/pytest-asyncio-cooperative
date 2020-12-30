@@ -26,6 +26,45 @@ def test_function_fixture(testdir):
     result.assert_outcomes(passed=1)
 
 
+def test_function_fixture_is_unique_for_function(testdir):
+    testdir.makepyfile(
+        """
+        import asyncio
+        import uuid
+        import pytest
+
+        global_uuid = None
+
+        @pytest.fixture
+        async def grandparent_fixture():
+            return str(uuid.uuid4())
+
+
+        @pytest.fixture
+        async def my_fixture(grandparent_fixture):
+            return grandparent_fixture
+
+
+        @pytest.mark.asyncio_cooperative
+        async def test_a(my_fixture, grandparent_fixture):
+            global global_uuid
+            global_uuid = my_fixture
+            assert my_fixture == grandparent_fixture
+
+
+        @pytest.mark.asyncio_cooperative
+        async def test_b(my_fixture, grandparent_fixture):
+            await asyncio.sleep(2)
+            assert global_uuid
+            assert not global_uuid == my_fixture
+            assert my_fixture == grandparent_fixture
+
+    """
+    )
+    result = testdir.runpytest()
+    result.assert_outcomes(passed=2)
+
+
 def test_request(testdir):
     testdir.makepyfile(
         """
