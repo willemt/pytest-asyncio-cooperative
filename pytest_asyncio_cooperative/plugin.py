@@ -68,6 +68,10 @@ async def test_wrapper(item):
     fixture_values, teardowns = await fill_fixtures(item)
     item.stop_setup = time.time()
 
+    # This is a class method test so prepend `self`
+    if item.instance:
+        fixture_values.insert(0, item.instance)
+
     # Run test
     item.start = time.time()
     await item.function(*fixture_values)

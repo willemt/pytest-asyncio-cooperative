@@ -4,6 +4,10 @@ import inspect
 from _pytest.fixtures import FixtureRequest
 
 
+class Ignore(Exception):
+    pass
+
+
 def function_args(func):
     return func.__code__.co_varnames[: func.__code__.co_argcount]
 
@@ -16,6 +20,9 @@ def _get_fixture(item, arg_name):
     if arg_name == "request":
         return item._request
 
+    if arg_name == "self":
+        raise Ignore
+
     _fixtureinfo = item._fixtureinfo
     fixtures = sorted(
         _fixtureinfo.name2fixturedefs[arg_name], key=lambda x: not x.has_location
@@ -27,7 +34,10 @@ async def fill_fixtures(item):
     fixture_values = []
     teardowns = []
     for arg_name in function_args(item.function):
-        fixture = _get_fixture(item, arg_name)
+        try:
+            fixture = _get_fixture(item, arg_name)
+        except Ignore:
+            continue
 
         if fixture.scope not in ["function", "module", "session"]:
             raise Exception(f"{fixture.scope} scope not supported")
