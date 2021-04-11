@@ -87,10 +87,3 @@ Cons
 - Tests MUST be isolated from each other (ie. NO shared resources, NO `mock.patch`)
 
 - There is NO parallelism, CPU bound tests will NOT get a performance benefit
-
-Known Issues
-------------
-
-**Synchronous tests fail to run when async tests fail**
-
-Async tests are run BEFORE synchronous tests. If an async test fails then synchronous tests will NOT run. Therefore the synchronous tests will not report to have passed or failed.
