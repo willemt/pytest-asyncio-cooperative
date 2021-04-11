@@ -265,14 +265,8 @@ def pytest_runtestloop(session):
     if flakes_to_retry:
         _run_test_loop(flakes_to_retry, session, run_tests)
 
-    # Hack: because we might be running synchronous tests later (ie.
-    # regular_items) we to set this to zero otherwise pytest bails out early
-    # NOTE: this doesn't work, the return code is not non-negative
-    # if session.testsfailed:
-    #     session.testsfailed = 0
-
+    # Run synchronous tests
     session.items = regular_items
-
     for i, item in enumerate(session.items):
         nextitem = session.items[i + 1] if i + 1 < len(session.items) else None
         item.config.hook.pytest_runtest_protocol(item=item, nextitem=nextitem)
