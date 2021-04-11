@@ -10,7 +10,7 @@ def test_parameterize_single(testdir):
         @pytest.mark.asyncio_cooperative
         @pytest.mark.parametrize("number", [1, 2, 3])
         async def test_a(number):
-            print(number, flush=True)
+            # print(number, flush=True)
             await asyncio.sleep(2)
     """
     )
@@ -32,7 +32,7 @@ def test_parameterize_double(testdir):
         @pytest.mark.asyncio_cooperative
         @pytest.mark.parametrize("number", [1, 2, 3])
         async def test_a(number):
-            print(number, flush=True)
+            # print(number, flush=True)
             await asyncio.sleep(2)
 
 
@@ -58,7 +58,7 @@ def test_parameterize_cartesian(testdir):
         @pytest.mark.parametrize("number", [1, 2, 3])
         @pytest.mark.parametrize("number2", [4, 5, 6])
         async def test_a(number, number2):
-            print(number, number2, flush=True)
+            # print(number, number2, flush=True)
             assert number in [1, 2, 3]
             assert number2 in [4, 5, 6]
             await asyncio.sleep(2)

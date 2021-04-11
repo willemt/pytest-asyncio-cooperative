@@ -272,3 +272,13 @@ def pytest_runtestloop(session):
     #     session.testsfailed = 0
 
     session.items = regular_items
+
+    for i, item in enumerate(session.items):
+        nextitem = session.items[i + 1] if i + 1 < len(session.items) else None
+        item.config.hook.pytest_runtest_protocol(item=item, nextitem=nextitem)
+        if session.shouldfail:
+            raise session.Failed(session.shouldfail)
+        if session.shouldstop:
+            raise session.Interrupted(session.shouldstop)
+
+    return True
