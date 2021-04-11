@@ -12,12 +12,15 @@ def function_args(func):
     return func.__code__.co_varnames[: func.__code__.co_argcount]
 
 
-def _get_fixture(item, arg_name):
+def _get_fixture(item, arg_name, fixture=None):
     """
     Sometimes fixture names clash with plugin fixtures.
     We priortise fixtures that are defined inside the user's module
     """
     if arg_name == "request":
+        # Support parameterized fixture
+        if fixture and fixture.params:
+            item._request.param = item._pyfuncitem.callspec.params[fixture.argname]
         return item._request
 
     if arg_name == "self":
@@ -58,7 +61,7 @@ async def _fill_fixture_fixtures(_fixtureinfo, fixture, item):
     values = []
     all_teardowns = []
     for arg_name in function_args(fixture.func):
-        dep_fixture = _get_fixture(item, arg_name)
+        dep_fixture = _get_fixture(item, arg_name, fixture)
 
         value, teardowns = await fill_fixture_fixtures(_fixtureinfo, dep_fixture, item)
         values.append(value)
@@ -187,14 +190,6 @@ async def _make_regular_generator_fixture(_fixtureinfo, fixture, item):
     return gen.__next__(), teardowns + [gen]
 
 
-async def _make_parameterized_regular_fixture(_fixtureinfo, fixture, item):
-    # FIXME: we should use more of pytest's fixture system
-    request = item._request
-    request.param = item._pyfuncitem.callspec.params[fixture.argname]
-    val = fixture.func(request)
-    return val, []
-
-
 async def _make_regular_fixture(_fixtureinfo, fixture, item):
     # FIXME: we should use more of pytest's fixture system
     fixture_values, teardowns = await _fill_fixture_fixtures(
@@ -220,9 +215,6 @@ async def fill_fixture_fixtures(_fixtureinfo, fixture, item):
 
     elif inspect.isgeneratorfunction(fixture.func):
         return await _make_regular_generator_fixture(_fixtureinfo, fixture, item)
-
-    elif fixture.params:
-        return await _make_parameterized_regular_fixture(_fixtureinfo, fixture, item)
 
     elif inspect.isfunction(fixture.func):
         return await _make_regular_fixture(_fixtureinfo, fixture, item)

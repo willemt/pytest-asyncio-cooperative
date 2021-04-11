@@ -68,3 +68,91 @@ def test_parameterize_cartesian(testdir):
     result = testdir.runpytest()
 
     result.assert_outcomes(passed=9)
+
+
+def test_parameterize_with_request(testdir):
+    testdir.makeconftest("""""")
+
+    testdir.makepyfile(
+        """
+        import asyncio
+        import pytest
+
+
+        @pytest.mark.asyncio_cooperative
+        @pytest.mark.parametrize("number", [1, 2, 3])
+        async def test_a(request, number):
+            # print(number, flush=True)
+            await asyncio.sleep(2)
+    """
+    )
+
+    result = testdir.runpytest("-s")
+
+    result.assert_outcomes(passed=3)
+
+
+def test_request_with_params(testdir):
+    testdir.makepyfile(
+        """
+        import asyncio
+        import logging
+        import time
+
+        import pytest
+
+
+        @pytest.fixture(scope="session", params=["A"])
+        def fixture_A(request):
+            return request.param
+
+
+        @pytest.fixture(scope="session", params=["B"])
+        def fixture_B(fixture_A, request):
+            return request.param
+
+
+        @pytest.mark.asyncio_cooperative
+        async def test_async_01(fixture_B):
+            param = fixture_B
+            logging.info(f"time => {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))}")
+            await asyncio.sleep(5)
+    """
+    )
+
+    result = testdir.runpytest("-s")
+
+    result.assert_outcomes(passed=1)
+
+
+def test_request_with_multi_params(testdir):
+    testdir.makepyfile(
+        """
+        import asyncio
+        import logging
+        import time
+
+        import pytest
+
+
+        @pytest.fixture(scope="session", params=["A", "B"])
+        def fixture_A(request):
+            return request.param
+
+
+        @pytest.fixture(scope="session", params=["1", "2"])
+        def fixture_B(fixture_A, request):
+            return request.param
+
+
+        @pytest.mark.asyncio_cooperative
+        async def test_async_01(fixture_B):
+            param = fixture_B
+            logging.info(f"time => {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))}")
+            await asyncio.sleep(5)
+    """
+    )
+
+    result = testdir.runpytest("-s")
+
+    result.assert_outcomes(passed=4)
