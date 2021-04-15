@@ -5,6 +5,8 @@ import time
 
 import pytest
 
+from _pytest.runner import call_and_report
+
 from .assertion import activate_assert_rewrite
 from .fixtures import fill_fixtures
 
@@ -153,13 +155,22 @@ def _run_test_loop(tasks, session, run_tests):
         loop.close()
 
 
-@pytest.hookspec
+@pytest.hookimpl(hookwrapper=True, tryfirst=True)
 def pytest_runtestloop(session):
     if session.config.pluginmanager.is_registered("asyncio"):
         raise Exception(
             "pytest-asyncio-cooperative is NOT compatible with pytest-asyncio\n"
             "Uninstall pytest-asyncio or pass this option to pytest: `-p no:asyncio`\n"
         )
+
+    # pytest-cooperative needs to hijack the runtestloop from pytest.
+    # To prevent the default pytest runtestloop from running tests we make it think we
+    # were only collecting tests. Slightly a hack, but it is needed for other plugins
+    # which use the pytest_runtestloop hook.
+    previous_collectonly = session.config.option.collectonly
+    session.config.option.collectonly = True
+    yield
+    session.config.option.collectonly = previous_collectonly
 
     session.wrapped_fixtures = {}
 
@@ -237,7 +248,9 @@ def pytest_runtestloop(session):
                         continue
 
                 item.runtest = lambda: result.result()
+
                 item.ihook.pytest_runtest_protocol(item=item, nextitem=None)
+
                 # Hack: See rewrite comment below
                 # pytest_runttest_protocl will disable the rewrite assertion
                 # so we renable it here
