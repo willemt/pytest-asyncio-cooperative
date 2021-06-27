@@ -74,25 +74,33 @@ async def test_wrapper(item):
     if item.instance:
         fixture_values.insert(0, item.instance)
 
+    async def do_teardowns():
+        item.start_teardown = time.time()
+        for teardown in teardowns:
+            if inspect.isgenerator(teardown):
+                try:
+                    teardown.__next__()
+                except StopIteration:
+                    pass
+            else:
+                try:
+                    await teardown.__anext__()
+                except StopAsyncIteration:
+                    pass
+        item.stop_teardown = time.time()
+
     # Run test
     item.start = time.time()
-    await item.function(*fixture_values)
-    item.stop = time.time()
+    try:
+        await item.function(*fixture_values)
+    except:
+        # Teardown here otherwise we might leave fixtures with locks acquired
+        item.stop = time.time()
+        await do_teardowns()
+        raise
 
-    # Do teardowns
-    item.start_teardown = time.time()
-    for teardown in teardowns:
-        if inspect.isgenerator(teardown):
-            try:
-                teardown.__next__()
-            except StopIteration:
-                pass
-        else:
-            try:
-                await teardown.__anext__()
-            except StopAsyncIteration:
-                pass
-    item.stop_teardown = time.time()
+    item.stop = time.time()
+    await do_teardowns()
 
 
 # TODO: move to hypothesis module
