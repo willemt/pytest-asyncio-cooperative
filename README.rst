@@ -80,10 +80,46 @@ Pros
 Cons
 ----
 
-- All tests MUST be coroutines (ie. have the `async` keyword)
-
 - Order of tests is not guaranteed (ie. some blocking operations might taken longer and affect the order of test results)
 
-- Tests MUST be isolated from each other (ie. NO shared resources, NO `mock.patch`)
+- Tests MUST be isolated from each other (ie. NO shared resources, NO `mock.patch`). However, note that locks can be used to ensure isolation.
 
 - There is NO parallelism, CPU bound tests will NOT get a performance benefit
+
+
+Mocks & Shared Resources
+------------------------
+
+When using mocks and shared resources cooperative multitasking means tests could have race conditions.
+
+In this case you can use locks:
+
+.. code-block:: bash
+   :class: ignore
+
+   import asyncio
+   import pytest
+   from pytest_asyncio_cooperative import Lock
+
+   my_lock = Lock()
+
+   @pytest.fixture(scope="function")
+   async def lock():
+       async with my_lock():
+           yield
+
+   @pytest.mark.asyncio_cooperative
+   async def test_a(lock, mocker):
+       await asyncio.sleep(2)
+       mocker.patch("service.http.on_handler")
+       access_shared_resource()
+       assert my_fixture == "XXX"
+
+   @pytest.mark.asyncio_cooperative
+   async def test_b(lock, mocker):
+       await asyncio.sleep(2)
+       mocker.patch("service.http.on_handler")
+       access_shared_resource()
+       assert my_fixture == "XXX"
+
+In the above example it's important to put the `lock` fixture on the far left-hand side to ensures mutual exclusivity.
