@@ -2,6 +2,7 @@ import asyncio
 import functools
 import inspect
 import time
+from sys import version_info as sys_version_info
 
 import pytest
 
@@ -209,6 +210,12 @@ def pytest_runtestloop(session):
         else:
             regular_items.append(item)
 
+    def get_coro(task):
+        if sys_version_info >= (3, 8):
+            return task.get_coro()
+        else:
+            return task._coro
+
     async def run_tests(tasks, max_tasks):
         sidelined_tasks = tasks[max_tasks:]
         tasks = tasks[:max_tasks]
@@ -218,10 +225,15 @@ def pytest_runtestloop(session):
         completed = []
         while tasks:
 
+            # Schedule all the coroutines
+            for i in range(len(tasks)):
+                if asyncio.iscoroutine(tasks[i]):
+                    tasks[i] = asyncio.create_task(tasks[i])
+
             # Mark when the task was started
             for task in tasks:
                 if isinstance(task, asyncio.Task):
-                    item = item_by_coro[task._coro]
+                    item = item_by_coro[get_coro(task)]
                 else:
                     item = item_by_coro[task]
                 if not hasattr(item, "enqueue_time"):
@@ -235,13 +247,19 @@ def pytest_runtestloop(session):
             tasks = []
             for task in pending:
                 now = time.time()
-                item = item_by_coro[task._coro]
+                item = item_by_coro[get_coro(task)]
                 if task_timeout < now - item.enqueue_time:
-                    task.cancel()
+                    if sys_version_info >= (3, 9):
+                        msg = "Test took too long ({} s)".format(
+                            now - item.enqueue_time
+                        )
+                        task.cancel(msg=msg)
+                    else:
+                        task.cancel()
                 tasks.append(task)
 
             for result in done:
-                item = item_by_coro[result._coro]
+                item = item_by_coro[get_coro(result)]
 
                 # Flakey tests will be run again if they failed
                 # TODO: add retry count

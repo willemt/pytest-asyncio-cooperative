@@ -37,3 +37,27 @@ def test_function_must_be_async(testdir):
     assert includes_lines(expected_lines, result.stdout.lines)
 
     result.assert_outcomes(failed=1)
+
+def test_function_takes_too_long(testdir):
+    testdir.makeconftest(
+        """""")
+
+    testdir.makepyfile(
+        """
+        import asyncio
+        import pytest
+
+
+        @pytest.mark.asyncio_cooperative
+        async def test_a():
+            await asyncio.sleep(2)
+        
+        @pytest.mark.asyncio_cooperative
+        async def test_b():
+            await asyncio.sleep(1.1)
+    """
+    )
+
+    result = testdir.runpytest("--asyncio-task-timeout", "1")
+
+    result.assert_outcomes(failed=1, passed=1)
