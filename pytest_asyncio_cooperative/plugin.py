@@ -253,7 +253,7 @@ def pytest_runtestloop(session):
                 item = item_by_coro[get_coro(task)]
                 if task_timeout < now - item.enqueue_time:
                     if sys_version_info >= (3, 9):
-                        msg = "Test took too long ({} s)".format(
+                        msg = "Test took too long ({:.2f} s)".format(
                             now - item.enqueue_time
                         )
                         task.cancel(msg=msg)
