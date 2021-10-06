@@ -44,16 +44,19 @@ def pytest_runtest_makereport(item, call):
         if hasattr(item, "start") and hasattr(item, "stop"):
             call.start = item.start
             call.stop = item.stop
+            call.duration = call.stop - call.start
 
     elif call.when == "setup":
         if hasattr(item, "start_setup") and hasattr(item, "stop_setup"):
             call.start = item.start_setup
             call.stop = item.stop_setup
+            call.duration = call.stop - call.start
 
     elif call.when == "teardown":
         if hasattr(item, "start_teardown") and hasattr(item, "stop_teardown"):
             call.start = item.start_teardown
             call.stop = item.stop_teardown
+            call.duration = call.stop - call.start
 
 
 def not_coroutine_failure(function_name: str, *args, **kwargs):
