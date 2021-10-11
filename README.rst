@@ -123,3 +123,8 @@ In this case you can use locks:
        assert my_fixture == "XXX"
 
 In the above example it's important to put the `lock` fixture on the far left-hand side to ensures mutual exclusivity.
+
+Timeouts
+--------
+
+Tests are automatically cancelled after a timeout of 120s. You can change this with the `--asyncio-task-timeout` option.
