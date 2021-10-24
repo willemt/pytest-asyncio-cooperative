@@ -122,7 +122,7 @@ In this case you can use locks:
        access_shared_resource()
        assert my_fixture == "XXX"
 
-In the above example it's important to put the `lock` fixture on the far left-hand side to ensures mutual exclusivity.
+In the above example it's important to put the `lock` fixture on the far left-hand side to ensure mutual exclusivity.
 
 Timeouts
 --------
