@@ -61,7 +61,10 @@ async def _fill_fixture_fixtures(_fixtureinfo, fixture, item):
     values = []
     all_teardowns = []
     for arg_name in function_args(fixture.func):
-        dep_fixture = _get_fixture(item, arg_name, fixture)
+        try:
+            dep_fixture = _get_fixture(item, arg_name, fixture)
+        except Ignore:
+            continue
 
         value, teardowns = await fill_fixture_fixtures(_fixtureinfo, dep_fixture, item)
         values.append(value)
