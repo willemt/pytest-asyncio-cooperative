@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "pytest-asyncio-cooperative"
+version = "0.19.0"
+description = "Run all your asynchronous tests cooperatively."
+authors = ["Willem Thiart <himself@willemthiart.com>"]
+license = "MIT"
+
+[tool.poetry.dependencies]
+python = ">=3.7"
+
+[tool.poetry.dev-dependencies]
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.plugins.pytest11]
+asyncio-cooperative = "pytest_asyncio_cooperative.plugin"
