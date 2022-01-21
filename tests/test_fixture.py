@@ -95,6 +95,29 @@ def test_tmp_path(testdir):
     result.assert_outcomes(passed=1)
 
 
+def test_indirect(testdir):
+    testdir.makepyfile(
+        """
+        import asyncio
+        import pytest
+        @pytest.fixture
+        def to_str(request):
+            yield str(request.param)
+        
+
+        @pytest.mark.asyncio_cooperative
+        @pytest.mark.parametrize("to_str, expected", [(1, "1"), (2, "2"), (3, "3")], indirect=[
+        "to_str"])
+        async def test_a(to_str, expected):
+            await asyncio.sleep(2)
+            assert to_str == expected
+    """
+    )
+
+    result = testdir.runpytest()
+    result.assert_outcomes(passed=3)
+
+
 def test_fixtures(testdir):
     testdir.makeconftest("""""")
 
