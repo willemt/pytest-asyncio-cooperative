@@ -15,12 +15,15 @@ def function_args(func):
 def _get_fixture(item, arg_name, fixture=None):
     """
     Sometimes fixture names clash with plugin fixtures.
-    We priortise fixtures that are defined inside the user's module
+    We prioritise fixtures that are defined inside the user's module
     """
     if arg_name == "request":
         # Support parameterized fixture
-        if fixture and fixture.params:
-            item._request.param = item._pyfuncitem.callspec.params[fixture.argname]
+        if fixture:
+            try:
+                item._request.param = item._pyfuncitem.callspec.params[fixture.argname]
+            except AttributeError as e:
+                pass
         return item._request
 
     if arg_name == "self":
