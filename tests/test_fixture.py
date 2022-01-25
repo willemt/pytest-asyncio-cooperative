@@ -322,3 +322,83 @@ def test_prefer_user_fixture_over_plugin_fixture(testdir):
     result = testdir.runpytest()
 
     result.assert_outcomes(passed=1)
+
+
+def test_ordering_of_fixtures_based_off_function_arguments(testdir):
+    testdir.makepyfile(
+        """
+        import asyncio
+        import pytest
+
+        @pytest.fixture
+        async def abc():
+            await asyncio.sleep(0.1)
+            yield "abc"
+            await asyncio.sleep(0.1)
+
+
+        @pytest.fixture
+        async def _def():
+            await asyncio.sleep(0.1)
+            yield "def"
+            await asyncio.sleep(0.1)
+
+
+        @pytest.fixture
+        async def ghi():
+            await asyncio.sleep(0.1)
+            yield "ghi"
+            await asyncio.sleep(0.1)
+
+
+        @pytest.mark.asyncio_cooperative
+        async def test_ordering(ghi, _def, abc):
+            assert ghi == "ghi"
+            assert abc == "abc"
+            assert _def == "def"
+    """
+    )
+
+    result = testdir.runpytest()
+
+    result.assert_outcomes(passed=1)
+
+
+def test_ordering_of_fixtures_based_off_function_arguments_with_session_fixture(testdir):
+    testdir.makepyfile(
+        """
+        import asyncio
+        import pytest
+
+        @pytest.fixture(scope="session")
+        async def abc():
+            await asyncio.sleep(0.1)
+            yield "abc"
+            await asyncio.sleep(0.1)
+
+
+        @pytest.fixture
+        async def _def():
+            await asyncio.sleep(0.1)
+            yield "def"
+            await asyncio.sleep(0.1)
+
+
+        @pytest.fixture
+        async def ghi():
+            await asyncio.sleep(0.1)
+            yield "ghi"
+            await asyncio.sleep(0.1)
+
+
+        @pytest.mark.asyncio_cooperative
+        async def test_ordering(ghi, _def, abc):
+            assert ghi == "ghi"
+            assert abc == "abc"
+            assert _def == "def"
+    """
+    )
+
+    result = testdir.runpytest()
+
+    result.assert_outcomes(passed=1)

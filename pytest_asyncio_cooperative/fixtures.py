@@ -1,5 +1,6 @@
 import asyncio
 import inspect
+from typing import List
 
 from _pytest.fixtures import FixtureRequest
 
@@ -39,11 +40,22 @@ def _get_fixture(item, arg_name, fixture=None):
 async def fill_fixtures(item):
     fixture_values = []
     teardowns = []
-    for arg_name in function_args(item.function):
+
+    # Important to maintain order of fixtures specified by function
+    fixture_names: List[str] = list(function_args(item.function))
+
+    # Add fixtures not specified in function arguments (eg. autouse)
+    for fixture_name in item._fixtureinfo.names_closure:
+        if fixture_name not in fixture_names:
+            fixture_names.append(fixture_name)
+
+    for fixture_name in fixture_names:
         try:
-            fixture = _get_fixture(item, arg_name)
+            fixture = _get_fixture(item, fixture_name)
         except Ignore:
             continue
+
+        is_autouse = fixture_name not in function_args(item.function)
 
         if fixture.scope not in ["function", "module", "session"]:
             raise Exception(f"{fixture.scope} scope not supported")
@@ -52,7 +64,8 @@ async def fill_fixtures(item):
             item._fixtureinfo, fixture, item
         )
         teardowns.extend(teardowns2)
-        fixture_values.append(value)
+        if not is_autouse:
+            fixture_values.append(value)
 
     # Slight hack to stop the regular fixture logic from running
     item.fixturenames = []
