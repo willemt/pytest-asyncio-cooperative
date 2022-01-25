@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pytest-asyncio-cooperative"
-version = "0.20.0"
+version = "0.21.0"
 description = "Run all your asynchronous tests cooperatively."
 authors = ["Willem Thiart <himself@willemthiart.com>"]
 license = "MIT"
