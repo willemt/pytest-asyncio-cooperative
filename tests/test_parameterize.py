@@ -156,3 +156,28 @@ def test_request_with_multi_params(testdir):
     result = testdir.runpytest("-s")
 
     result.assert_outcomes(passed=4)
+
+
+def test_parametrize_with_regular_fixture(testdir):
+    testdir.makepyfile(
+        """
+        import asyncio
+        import logging
+        import time
+
+        import pytest
+
+
+        @pytest.fixture
+        def fixture_a():
+            return "xxx"
+
+
+        @pytest.mark.asyncio_cooperative
+        @pytest.mark.parametrize("param", [1, 2])
+        async def test_async_foo(fixture_a, param):
+            await asyncio.sleep(param)
+    """
+    )
+    result = testdir.runpytest("-s")
+    result.assert_outcomes(passed=2)

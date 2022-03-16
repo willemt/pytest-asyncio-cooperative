@@ -23,8 +23,9 @@ def _get_fixture(item, arg_name, fixture=None):
         if fixture:
             try:
                 item._request.param = item._pyfuncitem.callspec.params[fixture.argname]
-            except AttributeError as e:
+            except (AttributeError, KeyError) :
                 pass
+
         return item._request
 
     if arg_name == "self":
