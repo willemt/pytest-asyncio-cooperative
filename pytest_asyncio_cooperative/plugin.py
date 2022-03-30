@@ -219,7 +219,7 @@ def pytest_runtestloop(session):
         else:
             return task._coro
 
-    async def run_tests(tasks, max_tasks):
+    async def run_tests(tasks, max_tasks: int):
         sidelined_tasks = tasks[max_tasks:]
         tasks = tasks[:max_tasks]
 
@@ -291,7 +291,8 @@ def pytest_runtestloop(session):
                 completed.append(result)
 
             if sidelined_tasks:
-                tasks.append(sidelined_tasks.pop(0))
+                if len(tasks) < max_tasks:
+                    tasks.append(sidelined_tasks.pop(0))
 
         return completed
 
