@@ -46,7 +46,7 @@ async def fill_fixtures(item):
     fixture_names: List[str] = list(function_args(item.function))
 
     # Add fixtures not specified in function arguments (eg. autouse)
-    for fixture_name in item._fixtureinfo.names_closure:
+    for fixture_name in item._fixtureinfo.initialnames:
         if fixture_name not in fixture_names:
             fixture_names.append(fixture_name)
 
@@ -113,6 +113,50 @@ class CachedFunction(CachedFunctionBase):
             return value
 
 
+class GenCounter:
+    def __init__(self, parent):
+        self.num_calls = 0
+        self.parent = parent
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        self.num_calls += 1
+        if self.num_calls == 2:
+            self.parent.completed(self)
+        return self.parent.__next__()
+
+
+class CachedGen(CachedFunctionBase):
+    """Save the result of the 1st yield.
+    Yield 2nd yield when all callers have yielded."""
+
+    def __init__(self, wrapped_func):
+        super().__init__(wrapped_func)
+        self.instances = set()
+
+    def completed(self, instance):
+        self.instances.remove(instance)
+
+    def __call__(self, *args):
+        self.args = args
+        instance = GenCounter(self)
+        self.instances.add(instance)
+        return instance
+
+    def __next__(self):
+        if len(self.instances) == 0:
+            return self.gen.__next__()
+        if hasattr(self, "value"):
+            return self.value
+        else:
+            gen = self.wrapped_func(*self.args)
+            self.gen = gen
+            self.value = gen.__next__()
+            return self.value
+
+
 class AsyncGenCounter:
     def __init__(self, parent):
         self.num_calls = 0
@@ -163,14 +207,25 @@ async def _make_asyncgen_fixture(_fixtureinfo, fixture, item):
         _fixtureinfo, fixture, item
     )
 
-    # Cache the module call
     if fixture.scope in ["module", "session"]:
         if not isinstance(fixture.func, CachedAsyncGen):
             fixture.func = CachedAsyncGen(fixture.func)
+        func = fixture.func
 
-    gen = fixture.func(*fixture_values)
+    elif fixture.scope in ["function"]:
+        try:
+            func = item._asyncio_cooperative_cached_functions[fixture]
+        except AttributeError:
+            func = CachedAsyncGen(fixture.func)
+            item._asyncio_cooperative_cached_functions = {fixture: func}
+        except KeyError:
+            func = CachedAsyncGen(fixture.func)
+
+        item._asyncio_cooperative_cached_functions[fixture] = func
+
+    gen = func(*fixture_values)
     value = await gen.__anext__()
-    return value, teardowns + [gen]
+    return value, [gen] + teardowns
 
 
 async def _make_coroutine_fixture(_fixtureinfo, fixture, item):
@@ -202,12 +257,27 @@ async def _make_coroutine_fixture(_fixtureinfo, fixture, item):
 
 
 async def _make_regular_generator_fixture(_fixtureinfo, fixture, item):
-    # FIXME: we should use more of pytest's fixture system
     fixture_values, teardowns = await _fill_fixture_fixtures(
         _fixtureinfo, fixture, item
     )
-    gen = fixture.func(*fixture_values)
-    return gen.__next__(), teardowns + [gen]
+
+    if fixture.scope in ["module", "session"]:
+        if not isinstance(fixture.func, CachedGen):
+            func = CachedGen(fixture.func)
+
+    elif fixture.scope in ["function"]:
+        try:
+            func = item._asyncio_cooperative_cached_functions[fixture]
+        except AttributeError:
+            func = CachedGen(fixture.func)
+            item._asyncio_cooperative_cached_functions = {fixture: func}
+        except KeyError:
+            func = CachedGen(fixture.func)
+
+        item._asyncio_cooperative_cached_functions[fixture] = func
+
+    gen = func(*fixture_values)
+    return gen.__next__(), [gen] + teardowns
 
 
 async def _make_regular_fixture(_fixtureinfo, fixture, item):
@@ -233,7 +303,7 @@ async def fill_fixture_fixtures(_fixtureinfo, fixture, item):
     ):
         return await _make_coroutine_fixture(_fixtureinfo, fixture, item)
 
-    elif inspect.isgeneratorfunction(fixture.func):
+    elif inspect.isgeneratorfunction(fixture.func) or isinstance(fixture.func, CachedGen):
         return await _make_regular_generator_fixture(_fixtureinfo, fixture, item)
 
     elif inspect.isfunction(fixture.func):

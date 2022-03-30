@@ -1,17 +1,6 @@
-from typing import List
-
 import pytest
 
-
-def includes_lines(expected_lines: List[str], lines: List[str]) -> bool:
-    for line in lines:
-        for i, eline in enumerate(list(expected_lines)):
-            if eline == line:
-                expected_lines.pop(i)
-                break
-
-    assert expected_lines == []
-    return expected_lines == []
+from .conftest import includes_lines
 
 
 def test_function_must_be_async(testdir):
@@ -39,6 +28,7 @@ def test_function_must_be_async(testdir):
     assert includes_lines(expected_lines, result.stdout.lines)
 
     result.assert_outcomes(failed=1)
+
 
 @pytest.mark.parametrize("dur1, dur2, expectedfails, expectedpasses", [
     (1.1, 2, 2, 0),
