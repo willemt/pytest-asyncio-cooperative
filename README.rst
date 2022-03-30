@@ -128,3 +128,8 @@ Timeouts
 --------
 
 Tests are automatically cancelled after a timeout of 120s. You can change this with the `--asyncio-task-timeout` option.
+
+Maximum Asynchronous Tasks
+--------------------------
+
+Sometimes you want to limit the number of tasks running concurrently. You can set a maximum with the `--max-asyncio-tasks` option.
