@@ -1,8 +1,8 @@
 import asyncio
 import inspect
-from typing import List
+from typing import List, Union
 
-from _pytest.fixtures import FixtureRequest
+from _pytest.fixtures import FixtureDef, FixtureRequest
 
 
 class Ignore(Exception):
@@ -202,14 +202,34 @@ class CachedAsyncGen(CachedFunctionBase):
                 return self.value
 
 
-async def _make_asyncgen_fixture(_fixtureinfo, fixture, item):
+class CachedAsyncGenByArguments(CachedAsyncGen):
+    """Save the result of the 1st yield.
+    Yield 2nd yield when all callers have yielded.
+    We cache based off arguments."""
+
+    def __init__(self, wrapped_func):
+        super().__init__(wrapped_func)
+        self.callers_by_args = {}
+
+    def __call__(self, *args):
+        if args in self.callers_by_args:
+            gen = self.callers_by_args[args]
+        else:
+            gen = CachedAsyncGen(self.wrapped_func)
+            self.callers_by_args[args] = gen
+        return gen(*args)
+
+
+async def _make_asyncgen_fixture(_fixtureinfo, fixture: FixtureDef, item):
     fixture_values, teardowns = await _fill_fixture_fixtures(
         _fixtureinfo, fixture, item
     )
 
+    func: Union[CachedAsyncGen, CachedAsyncGenByArguments]
+
     if fixture.scope in ["module", "session"]:
-        if not isinstance(fixture.func, CachedAsyncGen):
-            fixture.func = CachedAsyncGen(fixture.func)
+        if not isinstance(fixture.func, CachedAsyncGenByArguments):
+            fixture.func = CachedAsyncGenByArguments(fixture.func)
         func = fixture.func
 
     elif fixture.scope in ["function"]:

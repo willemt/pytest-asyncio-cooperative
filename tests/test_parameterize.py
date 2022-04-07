@@ -1,3 +1,6 @@
+from .conftest import includes_lines_in_order
+
+
 def test_parameterize_single(testdir):
     testdir.makeconftest("""""")
 
@@ -181,3 +184,31 @@ def test_parametrize_with_regular_fixture(testdir):
     )
     result = testdir.runpytest("-s")
     result.assert_outcomes(passed=2)
+
+
+def test_parametrize_session_fixture_with_indirect(testdir):
+    testdir.makepyfile(
+        """
+        import pytest
+
+
+        @pytest.fixture(scope="session")
+        async def expensive_resource(request):
+            yield f"I received {request.param}"
+
+
+        @pytest.mark.asyncio_cooperative
+        @pytest.mark.parametrize("expensive_resource", [1, 2], indirect=True)
+        async def test_indirect_parameterization_on_session_scoped_fixture(expensive_resource):
+            print(expensive_resource)
+    """
+    )
+    result = testdir.runpytest("-s")
+    result.assert_outcomes(passed=2)
+
+    expected_lines = [
+        "I received 1",
+        "I received 2",
+    ]
+
+    assert includes_lines_in_order(expected_lines, result.stdout.lines)
