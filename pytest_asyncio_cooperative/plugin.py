@@ -194,9 +194,12 @@ def pytest_runtestloop(session):
     item_by_coro = {}
     tasks = []
     for item in session.items:
-        markers = [m.name for m in item.own_markers]
+        markers = {m.name: m for m in item.own_markers}
 
         if "skip" in markers:
+            continue
+
+        if "skipif" in markers and markers["skipif"].args[0]:
             continue
 
         # Coerce into a task
