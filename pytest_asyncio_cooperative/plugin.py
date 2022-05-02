@@ -1,5 +1,5 @@
 import asyncio
-import collections
+import collections.abc
 import functools
 import inspect
 import time
@@ -82,7 +82,7 @@ async def test_wrapper(item):
     async def do_teardowns():
         item.start_teardown = time.time()
         for teardown in teardowns:
-            if isinstance(teardown, collections.Iterator):
+            if isinstance(teardown, collections.abc.Iterator):
                 try:
                     teardown.__next__()
                 except StopIteration:
