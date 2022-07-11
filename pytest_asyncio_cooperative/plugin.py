@@ -8,6 +8,7 @@ from sys import version_info as sys_version_info
 import pytest
 
 from _pytest.runner import call_and_report
+from _pytest.skipping import Skip, evaluate_skip_marks
 
 from .assertion import activate_assert_rewrite
 from .fixtures import fill_fixtures
@@ -196,11 +197,11 @@ def pytest_runtestloop(session):
     for item in session.items:
         markers = {m.name: m for m in item.own_markers}
 
-        if "skip" in markers:
-            continue
-
-        if "skipif" in markers and markers["skipif"].args[0]:
-            continue
+        if "skip" in markers or "skipif" in markers:
+            # Best to hand off to the core pytest logic to handle this so reporting works
+            if isinstance(evaluate_skip_marks(item), Skip):
+                regular_items.append(item)
+                continue
 
         # Coerce into a task
         if "asyncio_cooperative" in markers:
