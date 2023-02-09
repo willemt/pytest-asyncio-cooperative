@@ -231,8 +231,8 @@ def pytest_runtestloop(session):
         task_timeout = int(session.config.getoption("--asyncio-task-timeout"))
 
         completed = []
+        cancelled = []
         while tasks:
-
             # Schedule all the coroutines
             for i in range(len(tasks)):
                 if asyncio.iscoroutine(tasks[i]):
@@ -259,7 +259,7 @@ def pytest_runtestloop(session):
             for task in pending:
                 now = time.time()
                 item = item_by_coro[get_coro(task)]
-                if task_timeout < now - item.enqueue_time:
+                if task not in cancelled and task_timeout < now - item.enqueue_time:
                     if sys_version_info >= (3, 9):
                         msg = "Test took too long ({:.2f} s)".format(
                             now - item.enqueue_time
@@ -267,6 +267,7 @@ def pytest_runtestloop(session):
                         task.cancel(msg=msg)
                     else:
                         task.cancel()
+                    cancelled.append(task)
                 tasks.append(task)
 
             for result in done:

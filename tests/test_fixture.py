@@ -402,3 +402,29 @@ def test_ordering_of_fixtures_based_off_function_arguments_with_session_fixture(
     result = testdir.runpytest()
 
     result.assert_outcomes(passed=1)
+
+
+def test_fixture_cleanup(testdir):
+    testdir.makepyfile(
+        """
+        import asyncio
+        import pytest
+
+        @pytest.fixture
+        async def abc():
+            await asyncio.sleep(0.1)
+            yield {}
+            try:
+                # we need to do cleanup here, but the current task has been cancelled
+                await asyncio.sleep(0.1)
+            except asyncio.CancelledError:
+                raise RuntimeError("we shouldn't have been cancelled")
+
+        @pytest.mark.asyncio_cooperative
+        async def test_concurrent(abc) -> None:
+            await asyncio.sleep(5)
+    """
+    )
+
+    result = testdir.runpytest("--asyncio-task-timeout=2")
+    assert "we shouldn't have been cancelled" not in result.stdout.str()
