@@ -108,9 +108,11 @@ class CachedFunction(CachedFunctionBase):
         async with self.lock:
             if hasattr(self, "value"):
                 return self.value
-            value = await self.wrapped_func(*args)
-            self.value = value
-            return value
+            if inspect.iscoroutinefunction(self.wrapped_func):
+                self.value = await self.wrapped_func(*args)
+            else:
+                self.value = self.wrapped_func(*args)
+            return self.value
 
 
 class GenCounter:
@@ -283,7 +285,8 @@ async def _make_regular_generator_fixture(_fixtureinfo, fixture, item):
 
     if fixture.scope in ["module", "session"]:
         if not isinstance(fixture.func, CachedGen):
-            func = CachedGen(fixture.func)
+            fixture.func = CachedGen(fixture.func)
+        func = fixture.func
 
     elif fixture.scope in ["function"]:
         try:
@@ -305,8 +308,28 @@ async def _make_regular_fixture(_fixtureinfo, fixture, item):
     fixture_values, teardowns = await _fill_fixture_fixtures(
         _fixtureinfo, fixture, item
     )
-    val = fixture.func(*fixture_values)
-    return val, teardowns
+
+    # Cache the module call
+    if fixture.scope in ["module", "session"]:
+        if not isinstance(fixture.func, CachedFunction):
+            fixture.func = CachedFunction(fixture.func)
+        value = await fixture.func(*fixture_values)
+    elif fixture.scope in ["function"]:
+        try:
+            func = item._asyncio_cooperative_cached_functions[fixture]
+        except AttributeError:
+            func = CachedFunction(fixture.func)
+            item._asyncio_cooperative_cached_functions = {fixture: func}
+        except KeyError:
+            func = CachedFunction(fixture.func)
+
+        item._asyncio_cooperative_cached_functions[fixture] = func
+
+        value = await func(*fixture_values)
+    else:
+        raise Exception("unknown scope type")
+
+    return value, teardowns
 
 
 async def fill_fixture_fixtures(_fixtureinfo, fixture, item):

@@ -257,3 +257,94 @@ def test_generator_function_with_sibling_and_another_test(testdir):
 
     result = testdir.runpytest()
     assert includes_lines_in_order(expected_lines, result.stdout.lines)
+
+
+def test_session_scope_gen(testdir):
+    testdir.makepyfile(
+        """
+        import pytest
+        import asyncio
+
+        @pytest.fixture(scope="session")
+        def outer():
+            print("outer: setup")
+            yield
+            print("outer: cleanup")
+
+
+        @pytest.fixture
+        def inner(outer):
+            print("inner: setup")
+            yield
+            print("inner: cleanup")
+
+        @pytest.mark.asyncio_cooperative
+        async def test_async_0(inner) -> None:
+            await asyncio.sleep(0.1)
+
+
+        @pytest.mark.asyncio_cooperative
+        async def test_async_1(inner) -> None:
+            await asyncio.sleep(0.1)
+    """
+    )
+
+    result = testdir.runpytest()
+
+    expected_lines = [
+        "outer: setup",
+        "inner: setup",
+        "inner: setup",
+        "inner: cleanup",
+        "inner: cleanup",
+        "outer: cleanup",
+    ]
+
+    result = testdir.runpytest()
+    assert includes_lines_in_order(expected_lines, result.stdout.lines)
+
+    
+def test_session_scope_async_gen(testdir):
+    testdir.makepyfile(
+        """
+        import pytest
+        import asyncio
+
+        @pytest.fixture(scope="session")
+        async def outer():
+            print("outer: setup")
+            yield
+            print("outer: cleanup")
+
+
+        @pytest.fixture
+        def inner(outer):
+            print("inner: setup")
+            yield
+            print("inner: cleanup")
+
+
+        @pytest.mark.asyncio_cooperative
+        async def test_async_0(inner) -> None:
+            await asyncio.sleep(0.1)
+
+
+        @pytest.mark.asyncio_cooperative
+        async def test_async_1(inner) -> None:
+            await asyncio.sleep(0.1)
+    """
+    )
+
+    result = testdir.runpytest()
+
+    expected_lines = [
+        "outer: setup",
+        "inner: setup",
+        "inner: setup",
+        "inner: cleanup",
+        "inner: cleanup",
+        "outer: cleanup",
+    ]
+
+    result = testdir.runpytest()
+    assert includes_lines_in_order(expected_lines, result.stdout.lines)
