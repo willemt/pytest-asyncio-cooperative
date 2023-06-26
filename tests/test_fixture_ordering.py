@@ -300,10 +300,10 @@ def test_session_scope_gen(testdir):
         "outer: cleanup",
     ]
 
-    result = testdir.runpytest()
+    result = testdir.runpytest("-q", "--report-passed=")
     assert includes_lines_in_order(expected_lines, result.stdout.lines)
 
-    
+
 def test_session_scope_async_gen(testdir):
     testdir.makepyfile(
         """
@@ -346,5 +346,5 @@ def test_session_scope_async_gen(testdir):
         "outer: cleanup",
     ]
 
-    result = testdir.runpytest()
+    result = testdir.runpytest("-q", "--report-passed=")
     assert includes_lines_in_order(expected_lines, result.stdout.lines)
