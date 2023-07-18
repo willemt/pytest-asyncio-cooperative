@@ -50,6 +50,8 @@ async def fill_fixtures(item):
         if fixture_name not in fixture_names:
             fixture_names.append(fixture_name)
 
+    fixtures = []
+    are_autouse = []
     for fixture_name in fixture_names:
         try:
             fixture = _get_fixture(item, fixture_name)
@@ -60,11 +62,18 @@ async def fill_fixtures(item):
 
         if fixture.scope not in ["function", "module", "session"]:
             raise Exception(f"{fixture.scope} scope not supported")
+        
+        fixtures.append(fixture)
+        are_autouse.append(is_autouse)
+    
+    # Fill fixtures concurrently
+    fill_results = await asyncio.gather(
+        *(fill_fixture_fixtures(item._fixtureinfo, fixture, item) for fixture in fixtures)
+    )
 
-        value, teardowns2 = await fill_fixture_fixtures(
-            item._fixtureinfo, fixture, item
-        )
-        teardowns.extend(teardowns2)
+    for ((value, extra_teardowns), is_autouse) in zip(fill_results, are_autouse):
+        teardowns.extend(extra_teardowns)
+
         if not is_autouse:
             fixture_values.append(value)
 
