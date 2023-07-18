@@ -127,9 +127,9 @@ In the above example it's important to put the `lock` fixture on the far left-ha
 Timeouts
 --------
 
-Tests are automatically cancelled after a timeout of 120s. You can change this with the `--asyncio-task-timeout` option.
+Tests are automatically cancelled after a timeout of 120s. You can change this with the `--asyncio-task-timeout` option or by adding an `asyncio_task_timeout` entry to your `pytest.ini` file.
 
 Maximum Asynchronous Tasks
 --------------------------
 
-Sometimes you want to limit the number of tasks running concurrently. You can set a maximum with the `--max-asyncio-tasks` option.
+Sometimes you want to limit the number of tasks running concurrently. You can set a maximum with the `--max-asyncio-tasks` option by adding a `max_asyncio_tasks` entry to your `pytest.ini` file.

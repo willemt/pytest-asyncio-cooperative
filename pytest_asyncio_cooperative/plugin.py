@@ -18,14 +18,25 @@ def pytest_addoption(parser):
     parser.addoption(
         "--max-asyncio-tasks",
         action="store",
-        default=100,
+        default=None,
         help="asyncio: maximum number of tasks to run concurrently (int)",
     )
+    parser.addini(
+        "max_asyncio_tasks",
+        "asyncio: maximum number of tasks to run concurrently (int)",
+        default=100,
+    )
+
     parser.addoption(
         "--asyncio-task-timeout",
         action="store",
-        default=120,
+        default=None,
         help="asyncio: number of seconds before a test will be cancelled (int)",
+    )
+    parser.addini(
+        "asyncio_task_timeout",
+        "asyncio: number of seconds before a test will be cancelled (int)",
+        default=120,
     )
 
 
@@ -161,9 +172,14 @@ def item_to_task(item):
 
 
 def _run_test_loop(tasks, session, run_tests):
+    max_tasks = int(
+        session.config.getoption("--max-asyncio-tasks")
+        or session.config.getini("max_asyncio_tasks")
+    )
+
     loop = asyncio.new_event_loop()
     try:
-        task = run_tests(tasks, int(session.config.getoption("--max-asyncio-tasks")))
+        task = run_tests(tasks, int(max_tasks))
         loop.run_until_complete(task)
     finally:
         loop.close()
@@ -228,7 +244,10 @@ def pytest_runtestloop(session):
         sidelined_tasks = tasks[max_tasks:]
         tasks = tasks[:max_tasks]
 
-        task_timeout = int(session.config.getoption("--asyncio-task-timeout"))
+        task_timeout = int(
+            session.config.getoption("--asyncio-task-timeout")
+            or session.config.getini("asyncio_task_timeout")
+        )
 
         completed = []
         cancelled = []
