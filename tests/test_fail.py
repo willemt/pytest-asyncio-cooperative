@@ -1,34 +1,5 @@
 import pytest
 
-from .conftest import includes_lines
-
-
-def test_function_must_be_async(testdir):
-    testdir.makeconftest("""""")
-
-    testdir.makepyfile(
-        """
-        import asyncio
-        import pytest
-
-
-        @pytest.mark.asyncio_cooperative
-        def test_a():
-            assert 1 == 1
-    """
-    )
-
-    expected_lines = [
-        "E       Exception: Function test_a is not a coroutine.",
-        "E       Tests with the `@pytest.mark.asyncio_cooperative` mark MUST be coroutines.",
-        "E       Please add the `async` keyword to the test function.",
-    ]
-
-    result = testdir.runpytest()
-    assert includes_lines(expected_lines, result.stdout.lines)
-
-    result.assert_outcomes(failed=1)
-
 
 @pytest.mark.parametrize("dur1, dur2, expectedfails, expectedpasses", [
     (1.1, 2, 2, 0),

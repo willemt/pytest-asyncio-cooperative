@@ -73,14 +73,6 @@ def pytest_runtest_makereport(item, call):
             call.duration = call.stop - call.start
 
 
-def not_coroutine_failure(function_name: str, *args, **kwargs):
-    raise Exception(
-        f"Function {function_name} is not a coroutine.\n"
-        f"Tests with the `@pytest.mark.asyncio_cooperative` mark MUST be coroutines.\n"
-        f"Please add the `async` keyword to the test function."
-    )
-
-
 async def test_wrapper(item):
     # Do setup
     item.start_setup = time.time()
@@ -109,7 +101,10 @@ async def test_wrapper(item):
     # Run test
     item.start = time.time()
     try:
-        await item.function(*fixture_values)
+        if inspect.iscoroutinefunction(item.function):
+            await item.function(*fixture_values)
+        else:
+            item.function(*fixture_values)
     except:
         # Teardown here otherwise we might leave fixtures with locks acquired
         item.stop = time.time()
@@ -158,17 +153,11 @@ async def hypothesis_test_wrapper(item):
     item.stop_teardown = time.time()
 
 
-class NotCoroutine(Exception):
-    pass
-
-
 def item_to_task(item):
-    if inspect.iscoroutinefunction(item.function):
-        return test_wrapper(item)
-    elif getattr(item.function, "is_hypothesis_test", False):
+    if getattr(item.function, "is_hypothesis_test", False):
         return hypothesis_test_wrapper(item)
     else:
-        raise NotCoroutine
+        return test_wrapper(item)
 
 
 def _run_test_loop(tasks, session, run_tests):
@@ -221,12 +210,7 @@ def pytest_runtestloop(session):
 
         # Coerce into a task
         if "asyncio_cooperative" in markers:
-            try:
-                task = item_to_task(item)
-            except NotCoroutine:
-                item.runtest = functools.partial(not_coroutine_failure, item.name)
-                item.ihook.pytest_runtest_protocol(item=item, nextitem=None)
-                continue
+            task = item_to_task(item)
 
             item._flakey = "flakey" in markers
             item_by_coro[task] = item
