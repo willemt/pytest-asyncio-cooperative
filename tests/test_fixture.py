@@ -428,3 +428,31 @@ def test_fixture_cleanup(testdir):
 
     result = testdir.runpytest("--asyncio-task-timeout=2")
     assert "we shouldn't have been cancelled" not in result.stdout.str()
+
+
+def test_concurrent_function_fixture_filling(testdir):
+    testdir.makepyfile(
+        """
+        import asyncio
+        import uuid
+        import pytest
+
+        @pytest.fixture
+        async def aaa():
+            await asyncio.sleep(2)
+
+
+        @pytest.fixture
+        async def bbb():
+            await asyncio.sleep(2)
+
+
+        @pytest.mark.asyncio_cooperative
+        async def test_a(aaa, bbb):
+            assert True
+    """
+    )
+
+    result = testdir.runpytest("--asyncio-task-timeout=3")
+
+    result.assert_outcomes(passed=1)
