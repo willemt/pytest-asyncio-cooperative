@@ -1,4 +1,5 @@
 import asyncio
+import collections.abc
 import inspect
 from typing import List, Union
 
@@ -96,6 +97,20 @@ async def _fill_fixture_fixtures(_fixtureinfo, fixture, item):
         values.append(value)
         all_teardowns.extend(teardowns)
     return values, all_teardowns
+
+
+async def do_teardowns(teardowns):
+    for teardown in teardowns:
+        if isinstance(teardown, collections.abc.Iterator):
+            try:
+                teardown.__next__()
+            except StopIteration:
+                pass
+        else:
+            try:
+                await teardown.__anext__()
+            except StopAsyncIteration:
+                pass
 
 
 class CachedFunctionBase(object):

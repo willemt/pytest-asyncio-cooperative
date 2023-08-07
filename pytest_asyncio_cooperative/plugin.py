@@ -1,5 +1,4 @@
 import asyncio
-import collections.abc
 import functools
 import inspect
 import time
@@ -11,7 +10,7 @@ from _pytest.runner import call_and_report
 from _pytest.skipping import Skip, evaluate_skip_marks
 
 from .assertion import activate_assert_rewrite
-from .fixtures import fill_fixtures
+from .fixtures import fill_fixtures, do_teardowns
 
 
 def pytest_addoption(parser):
@@ -91,33 +90,16 @@ async def test_wrapper(item):
     if item.instance:
         fixture_values.insert(0, item.instance)
 
-    async def do_teardowns():
-        item.start_teardown = time.time()
-        for teardown in teardowns:
-            if isinstance(teardown, collections.abc.Iterator):
-                try:
-                    teardown.__next__()
-                except StopIteration:
-                    pass
-            else:
-                try:
-                    await teardown.__anext__()
-                except StopAsyncIteration:
-                    pass
-        item.stop_teardown = time.time()
-
     # Run test
     item.start = time.time()
     try:
         await item.function(*fixture_values)
-    except:
+    finally:
         # Teardown here otherwise we might leave fixtures with locks acquired
         item.stop = time.time()
-        await do_teardowns()
-        raise
-
-    item.stop = time.time()
-    await do_teardowns()
+        item.start_teardown = time.time()
+        await do_teardowns(teardowns)
+        item.stop_teardown = time.time()
 
 
 # TODO: move to hypothesis module
