@@ -499,3 +499,32 @@ def test_shared_fixture_caching(testdir, scope, def_, ret, fail):
         # https://github.com/willemt/pytest-asyncio-cooperative/issues/42
     else:
         result.assert_outcomes(passed=2)
+
+
+def test_teardown_on_fixture_error(testdir):
+    testdir.makepyfile(
+        """
+        import pytest
+
+        import asyncio
+        from warnings import warn
+
+        @pytest.fixture
+        async def fixture_ok():
+            await asyncio.sleep(1)
+            yield
+            warn("fixture_ok teardown")
+
+        @pytest.fixture
+        async def fixture_fail():
+            await asyncio.sleep(2)
+            assert False
+
+        @pytest.mark.asyncio_cooperative
+        async def test(fixture_ok, fixture_fail):
+            assert True
+        """
+    )
+
+    with pytest.warns(UserWarning, match="fixture_ok teardown"):
+        result = testdir.runpytest()
