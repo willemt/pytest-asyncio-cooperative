@@ -16,7 +16,9 @@ def test_skipx(testdir):
 
     result = testdir.runpytest()
     # FIXME: should be skipped=1
-    result.assert_outcomes(errors=0, failed=0, passed=0, xfailed=0, xpassed=0, skipped=1)
+    result.assert_outcomes(
+        errors=0, failed=0, passed=0, xfailed=0, xpassed=0, skipped=1
+    )
 
 
 def test_skipif_is_true(testdir):
@@ -37,7 +39,9 @@ def test_skipif_is_true(testdir):
     )
 
     result = testdir.runpytest()
-    result.assert_outcomes(errors=0, failed=0, passed=0, xfailed=0, xpassed=0, skipped=1)
+    result.assert_outcomes(
+        errors=0, failed=0, passed=0, xfailed=0, xpassed=0, skipped=1
+    )
 
 
 def test_skipif_is_false(testdir):
@@ -58,7 +62,9 @@ def test_skipif_is_false(testdir):
     )
 
     result = testdir.runpytest()
-    result.assert_outcomes(errors=0, failed=0, passed=1, xfailed=0, xpassed=0, skipped=0)
+    result.assert_outcomes(
+        errors=0, failed=0, passed=1, xfailed=0, xpassed=0, skipped=0
+    )
 
 
 def test_skipif_with_passing(testdir):
@@ -89,4 +95,6 @@ def test_skipif_with_passing(testdir):
     )
 
     result = testdir.runpytest()
-    result.assert_outcomes(errors=0, failed=0, passed=1, xfailed=0, xpassed=0, skipped=2)
+    result.assert_outcomes(
+        errors=0, failed=0, passed=1, xfailed=0, xpassed=0, skipped=2
+    )

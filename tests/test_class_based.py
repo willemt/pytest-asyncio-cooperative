@@ -1,5 +1,6 @@
 def test_class_based_tests(testdir):
-    testdir.makepyfile("""
+    testdir.makepyfile(
+        """
         import pytest
 
 
@@ -8,7 +9,8 @@ def test_class_based_tests(testdir):
             async def test_cooperative(self):
                 assert True
 
-    """)
+    """
+    )
 
     result = testdir.runpytest()
 
@@ -16,7 +18,8 @@ def test_class_based_tests(testdir):
 
 
 def test_class_based_tests_with_fixture(testdir):
-    testdir.makepyfile("""
+    testdir.makepyfile(
+        """
         import pytest
 
 
@@ -29,7 +32,8 @@ def test_class_based_tests_with_fixture(testdir):
             async def test_cooperative(self, test_fixture):
                 assert test_fixture == "test_fixture"
 
-    """)
+    """
+    )
 
     result = testdir.runpytest()
 

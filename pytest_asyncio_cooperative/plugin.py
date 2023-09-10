@@ -270,7 +270,9 @@ def pytest_runtestloop(session):
 
             time_to_wait = (time.time() - earliest_enqueue_time) - task_timeout
             done, pending = await asyncio.wait(
-                tasks, return_when=asyncio.FIRST_COMPLETED, timeout=min(30, int(time_to_wait))
+                tasks,
+                return_when=asyncio.FIRST_COMPLETED,
+                timeout=min(30, int(time_to_wait)),
             )
 
             # Cancel tasks that have taken too long
