@@ -113,14 +113,14 @@ class CachedFunctionBase(object):
 
 
 class CachedFunction(CachedFunctionBase):
-    async def __call__(self, *args):
+    async def __call__(self, *args, **kwargs):
         async with self.lock:
             if hasattr(self, "value"):
                 return self.value
             if inspect.iscoroutinefunction(self.wrapped_func):
-                self.value = await self.wrapped_func(*args)
+                self.value = await self.wrapped_func(*args, **kwargs)
             else:
-                self.value = self.wrapped_func(*args)
+                self.value = self.wrapped_func(*args, **kwargs)
             return self.value
 
 
