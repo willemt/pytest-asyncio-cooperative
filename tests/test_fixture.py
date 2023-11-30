@@ -1,5 +1,6 @@
 import pytest
 
+
 def test_function_fixture(testdir):
     testdir.makepyfile(
         """
@@ -366,7 +367,9 @@ def test_ordering_of_fixtures_based_off_function_arguments(testdir):
     result.assert_outcomes(passed=1)
 
 
-def test_ordering_of_fixtures_based_off_function_arguments_with_session_fixture(testdir):
+def test_ordering_of_fixtures_based_off_function_arguments_with_session_fixture(
+    testdir,
+):
     testdir.makepyfile(
         """
         import asyncio
