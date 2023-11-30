@@ -127,10 +127,6 @@ class CachedFunction(CachedFunctionBase):
             except Exception as e:
                 self.exception = e
                 raise
-            if inspect.iscoroutinefunction(self.wrapped_func):
-                self.value = await self.wrapped_func(*args, **kwargs)
-            else:
-                self.value = self.wrapped_func(*args, **kwargs)
             return self.value
 
 
