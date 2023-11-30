@@ -117,10 +117,16 @@ class CachedFunction(CachedFunctionBase):
         async with self.lock:
             if hasattr(self, "value"):
                 return self.value
-            if inspect.iscoroutinefunction(self.wrapped_func):
-                self.value = await self.wrapped_func(*args, **kwargs)
-            else:
-                self.value = self.wrapped_func(*args, **kwargs)
+            if hasattr(self, "exception"):
+                raise self.exception
+            try:
+                if inspect.iscoroutinefunction(self.wrapped_func):
+                    self.value = await self.wrapped_func(*args, **kwargs)
+                else:
+                    self.value = self.wrapped_func(*args, **kwargs)
+            except Exception as e:
+                self.exception = e
+                raise
             return self.value
 
 
@@ -161,10 +167,16 @@ class CachedGen(CachedFunctionBase):
             return self.gen.__next__()
         if hasattr(self, "value"):
             return self.value
+        if hasattr(self, "exception"):
+            raise self.exception
         else:
-            gen = self.wrapped_func(*self.args)
-            self.gen = gen
-            self.value = gen.__next__()
+            try:
+                gen = self.wrapped_func(*self.args)
+                self.gen = gen
+                self.value = gen.__next__()
+            except Exception as e:
+                self.exception = e
+                raise
             return self.value
 
 
@@ -206,10 +218,16 @@ class CachedAsyncGen(CachedFunctionBase):
         async with self.lock:
             if hasattr(self, "value"):
                 return self.value
+            if hasattr(self, "exception"):
+                raise self.exception
             else:
-                gen = self.wrapped_func(*self.args)
-                self.gen = gen
-                self.value = await gen.__anext__()
+                try:
+                    gen = self.wrapped_func(*self.args)
+                    self.gen = gen
+                    self.value = await gen.__anext__()
+                except Exception as e:
+                    self.exception = e
+                    raise
                 return self.value
 
 
