@@ -5,13 +5,15 @@ import inspect
 import time
 from sys import version_info as sys_version_info
 
+import apluggy as pluggy
+
 import pytest
 
-from _pytest.runner import call_and_report
 from _pytest.skipping import Skip, evaluate_skip_marks
 
 from .assertion import activate_assert_rewrite
 from .fixtures import fill_fixtures
+from . import hookspecs
 
 
 def pytest_addoption(parser):
@@ -50,6 +52,55 @@ def pytest_configure(config):
     )
 
 
+hookimpl = pluggy.HookimplMarker('pytest-asyncio-cooperative')
+
+
+class CorePlugin:
+    @hookimpl
+    async def pytest_runtest_call(self, item) -> None:
+        # Do setup
+        item.start_setup = time.time()
+        fixture_values, teardowns = await fill_fixtures(item)
+        item.stop_setup = time.time()
+
+        # This is a class method test so prepend `self`
+        if item.instance:
+            fixture_values.insert(0, item.instance)
+
+        async def do_teardowns():
+            item.start_teardown = time.time()
+            for teardown in teardowns:
+                if isinstance(teardown, collections.abc.Iterator):
+                    try:
+                        teardown.__next__()
+                    except StopIteration:
+                        pass
+                else:
+                    try:
+                        await teardown.__anext__()
+                    except StopAsyncIteration:
+                        pass
+            item.stop_teardown = time.time()
+
+        # Run test
+        item.start = time.time()
+        try:
+            await item.function(*fixture_values)
+        except:
+            # Teardown here otherwise we might leave fixtures with locks acquired
+            item.stop = time.time()
+            await do_teardowns()
+            raise
+
+        item.stop = time.time()
+        await do_teardowns()
+
+
+pm = pluggy.PluginManager('pytest-asyncio-cooperative')
+pm.add_hookspecs(hookspecs)
+pm.register(CorePlugin)
+
+
 @pytest.hookspec
 def pytest_runtest_makereport(item, call):
     # Tests are run outside of the normal place, so we have to inject our timings
@@ -82,42 +133,7 @@ def not_coroutine_failure(function_name: str, *args, **kwargs):
 
 
 async def test_wrapper(item):
-    # Do setup
-    item.start_setup = time.time()
-    fixture_values, teardowns = await fill_fixtures(item)
-    item.stop_setup = time.time()
-
-    # This is a class method test so prepend `self`
-    if item.instance:
-        fixture_values.insert(0, item.instance)
-
-    async def do_teardowns():
-        item.start_teardown = time.time()
-        for teardown in teardowns:
-            if isinstance(teardown, collections.abc.Iterator):
-                try:
-                    teardown.__next__()
-                except StopIteration:
-                    pass
-            else:
-                try:
-                    await teardown.__anext__()
-                except StopAsyncIteration:
-                    pass
-        item.stop_teardown = time.time()
-
-    # Run test
-    item.start = time.time()
-    try:
-        await item.function(*fixture_values)
-    except:
-        # Teardown here otherwise we might leave fixtures with locks acquired
-        item.stop = time.time()
-        await do_teardowns()
-        raise
-
-    item.stop = time.time()
-    await do_teardowns()
+    await pm.ahook.pytest_runtest_call(item=item)
 
 
 # TODO: move to hypothesis module
