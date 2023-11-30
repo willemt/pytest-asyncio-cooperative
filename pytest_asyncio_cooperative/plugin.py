@@ -5,6 +5,9 @@ import inspect
 import time
 from sys import version_info as sys_version_info
 
+import apluggy as pluggy
+from apluggy import asynccontextmanager, contextmanager
+
 import pytest
 
 from _pytest.runner import call_and_report
@@ -50,6 +53,70 @@ def pytest_configure(config):
     )
 
 
+hookspec = pluggy.HookspecMarker('pytest-asyncio-cooperative')
+hookimpl = pluggy.HookimplMarker('pytest-asyncio-cooperative')
+
+
+class Spec:
+    """A hook specification namespace."""
+
+    @hookspec
+    async def pytest_runtest_call(self, item) -> None:
+        ...
+
+    @hookspec
+    async def pytest_runtest_logfinish(self, item) -> None:
+        ...
+
+
+class Plugin_1:
+    """A hook implementation namespace."""
+
+    @hookimpl
+    async def pytest_runtest_call(self, item) -> None:
+        # Do setup
+        item.start_setup = time.time()
+        fixture_values, teardowns = await fill_fixtures(item)
+        item.stop_setup = time.time()
+
+        # This is a class method test so prepend `self`
+        if item.instance:
+            fixture_values.insert(0, item.instance)
+
+        async def do_teardowns():
+            item.start_teardown = time.time()
+            for teardown in teardowns:
+                if isinstance(teardown, collections.abc.Iterator):
+                    try:
+                        teardown.__next__()
+                    except StopIteration:
+                        pass
+                else:
+                    try:
+                        await teardown.__anext__()
+                    except StopAsyncIteration:
+                        pass
+            item.stop_teardown = time.time()
+
+        # Run test
+        item.start = time.time()
+        try:
+            await item.function(*fixture_values)
+        except:
+            # Teardown here otherwise we might leave fixtures with locks acquired
+            item.stop = time.time()
+            await do_teardowns()
+            raise
+
+        item.stop = time.time()
+        await do_teardowns()
+
+
+pm = pluggy.PluginManager('pytest-asyncio-cooperative')
+pm.add_hookspecs(Spec)
+pm.register(Plugin_1)
+
+
 @pytest.hookspec
 def pytest_runtest_makereport(item, call):
     # Tests are run outside of the normal place, so we have to inject our timings
@@ -82,42 +149,7 @@ def not_coroutine_failure(function_name: str, *args, **kwargs):
 
 
 async def test_wrapper(item):
-    # Do setup
-    item.start_setup = time.time()
-    fixture_values, teardowns = await fill_fixtures(item)
-    item.stop_setup = time.time()
-
-    # This is a class method test so prepend `self`
-    if item.instance:
-        fixture_values.insert(0, item.instance)
-
-    async def do_teardowns():
-        item.start_teardown = time.time()
-        for teardown in teardowns:
-            if isinstance(teardown, collections.abc.Iterator):
-                try:
-                    teardown.__next__()
-                except StopIteration:
-                    pass
-            else:
-                try:
-                    await teardown.__anext__()
-                except StopAsyncIteration:
-                    pass
-        item.stop_teardown = time.time()
-
-    # Run test
-    item.start = time.time()
-    try:
-        await item.function(*fixture_values)
-    except:
-        # Teardown here otherwise we might leave fixtures with locks acquired
-        item.stop = time.time()
-        await do_teardowns()
-        raise
-
-    item.stop = time.time()
-    await do_teardowns()
+    await pm.ahook.pytest_runtest_call(item=item)
 
 
 # TODO: move to hypothesis module

@@ -6,7 +6,8 @@ authors = ["Willem Thiart <himself@willemthiart.com>"]
 license = "MIT"
 
 [tool.poetry.dependencies]
-python = ">=3.7"
+python = ">=3.10"
+apluggy = "^0.9.7"
 
 [tool.poetry.dev-dependencies]
 
