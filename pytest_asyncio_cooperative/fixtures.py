@@ -1,4 +1,5 @@
 import asyncio
+import collections.abc
 import inspect
 from typing import List, Union
 
@@ -68,14 +69,25 @@ async def fill_fixtures(item):
     
     # Fill fixtures concurrently
     fill_results = await asyncio.gather(
-        *(fill_fixture_fixtures(item._fixtureinfo, fixture, item) for fixture in fixtures)
+        *(fill_fixture_fixtures(item._fixtureinfo, fixture, item) for fixture in fixtures),
+        return_exceptions=True
     )
 
-    for ((value, extra_teardowns), is_autouse) in zip(fill_results, are_autouse):
+    exceptions = []
+    for result, is_autouse in zip(fill_results, are_autouse):
+        if isinstance(result, BaseException):
+            exceptions.append(result)
+            continue
+
+        value, extra_teardowns = result
         teardowns.extend(extra_teardowns)
 
         if not is_autouse:
             fixture_values.append(value)
+
+    if exceptions:
+        await do_teardowns(teardowns)
+        raise exceptions[0]
 
     # Slight hack to stop the regular fixture logic from running
     item.fixturenames = []
@@ -92,10 +104,30 @@ async def _fill_fixture_fixtures(_fixtureinfo, fixture, item):
         except Ignore:
             continue
 
-        value, teardowns = await fill_fixture_fixtures(_fixtureinfo, dep_fixture, item)
+        try:
+            value, teardowns = await fill_fixture_fixtures(_fixtureinfo, dep_fixture, item)
+        except:
+            await do_teardowns(all_teardowns)
+            raise
+
         values.append(value)
         all_teardowns.extend(teardowns)
+
     return values, all_teardowns
+
+
+async def do_teardowns(teardowns):
+    for teardown in teardowns:
+        if isinstance(teardown, collections.abc.Iterator):
+            try:
+                teardown.__next__()
+            except StopIteration:
+                pass
+        else:
+            try:
+                await teardown.__anext__()
+            except StopAsyncIteration:
+                pass
 
 
 class CachedFunctionBase(object):
