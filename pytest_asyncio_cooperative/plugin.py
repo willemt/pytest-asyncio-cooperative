@@ -6,15 +6,14 @@ import time
 from sys import version_info as sys_version_info
 
 import apluggy as pluggy
-from apluggy import asynccontextmanager, contextmanager
 
 import pytest
 
-from _pytest.runner import call_and_report
 from _pytest.skipping import Skip, evaluate_skip_marks
 
 from .assertion import activate_assert_rewrite
 from .fixtures import fill_fixtures
+from . import hookspecs
 
 
 def pytest_addoption(parser):
@@ -53,25 +52,10 @@ def pytest_configure(config):
     )
 
 
-hookspec = pluggy.HookspecMarker('pytest-asyncio-cooperative')
 hookimpl = pluggy.HookimplMarker('pytest-asyncio-cooperative')
 
 
-class Spec:
-    """A hook specification namespace."""
-
-    @hookspec
-    async def pytest_runtest_call(self, item) -> None:
-        ...
-
-    @hookspec
-    async def pytest_runtest_logfinish(self, item) -> None:
-        ...
-
-
-class Plugin_1:
-    """A hook implementation namespace."""
-
+class CorePlugin:
     @hookimpl
     async def pytest_runtest_call(self, item) -> None:
         # Do setup
@@ -113,8 +97,8 @@ class Plugin_1:
 
 
 pm = pluggy.PluginManager('pytest-asyncio-cooperative')
-pm.add_hookspecs(Spec)
-pm.register(Plugin_1)
+pm.add_hookspecs(hookspecs)
+pm.register(CorePlugin)
 
 
 @pytest.hookspec
