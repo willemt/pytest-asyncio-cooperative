@@ -28,6 +28,32 @@ def pytest_addoption(parser):
     )
 
     parser.addoption(
+        "--max-asyncio-tasks-by-mark",
+        action="store",
+        default=None,
+        help="asyncio: maximum number of tasks to run concurrently for each mark (mark1,mark2,..=int pairs, space separated)",
+    )
+    parser.addini(
+        "max_asyncio_tasks_by_mark",
+        "asyncio: asyncio: maximum number of tasks to run concurrently for each mark (mark1,mark2,..=int pairs, space separated)",
+        default=None,
+    )
+
+    parser.addoption(
+        "--max-asyncio-tasks-by-mark-remainder",
+        action="store",
+        default=0,
+        help="asyncio: maximum number of tasks to run concurrently for tasks that didn't match any "
+        "marks in `--max-asyncio-tasks-by-mark` (default 0, unlimited)",
+    )
+    parser.addini(
+        "max_asyncio_tasks_by_mark_remainder",
+        help="asyncio: maximum number of tasks to run concurrently for tasks that didn't match any "
+        "marks in `--max-asyncio-tasks-by-mark` (default 0, unlimited)",
+        default=0,
+    )
+
+    parser.addoption(
         "--asyncio-task-timeout",
         action="store",
         default=None,
@@ -160,15 +186,128 @@ def item_to_task(item):
         return test_wrapper(item)
 
 
+class MarkLimits:
+    # To support multiple marks in the same group separate by comma, a shared group object
+    # is created and inserted into the groups dictionary multiple times for each mark in
+    # the group. When a test has multiple marks that belong to the same group, each mark
+    # will be added multiple times to the set, but the result will be that the number
+    # of active items in the group will only increase by 1. A simple ref count is not enough
+    # in this situation, because it would overcount how many items are actively running.
+    class Group:
+        def __init__(self, max):
+            self.max = max
+            self.items = set()
+
+    def __init__(self):
+        self.groups = {}
+        self.remainder = 0
+        self.remainder_max = 0
+
+    def update_config(self, session):
+        if session.config.getoption("--max-asyncio-tasks-by-mark"):
+            self.groups = MarkLimits.parse_max_tasks_by_mark(
+                session.config.getoption("--max-asyncio-tasks-by-mark"),
+                "--max-asyncio-tasks-by-mark",
+            )
+        else:
+            self.groups = MarkLimits.parse_max_tasks_by_mark(
+                session.config.getini("max_asyncio_tasks_by_mark"),
+                "max_asyncio_tasks_by_mark",
+            )
+
+        self.remainder_max = int(
+            session.config.getoption("--max-asyncio-tasks-by-mark-remainder")
+            or session.config.getini("max_asyncio_tasks_by_mark_remainder")
+        )
+
+    @staticmethod
+    def parse_max_tasks_by_mark(config_value, debug_prefix):
+        if not config_value:
+            return {}
+
+        result = {}
+        pairs = config_value.split()
+        for pair in pairs:
+            columns = pair.split("=")
+            if len(columns) > 2:
+                assert False, f"`{debug_prefix}`: too many `=` in `{pair}`"
+
+            try:
+                max_tasks = int(columns[1])
+            except ValueError:
+                assert False, f"`{debug_prefix}`: expected integer in `{pair}`"
+
+            group = MarkLimits.Group(max_tasks)
+            for mark in columns[0].split(","):
+                assert (
+                    mark not in result
+                ), f"`{debug_prefix}`: multiple occurences of mark `{mark}`"
+                result[mark] = group
+
+        return result
+
+    def would_exceed_max_marks(self, item):
+        for mark in item.own_markers:
+            group = self.groups.get(mark.name)
+            if group and len(group.items) >= group.max:
+                return True
+
+        if self.remainder_max and self.remainder >= self.remainder_max:
+            return True
+
+        return False
+
+    def update_active_marks(self, item, add):
+        matched_mark = False
+
+        for mark in item.own_markers:
+            group = self.groups.get(mark.name)
+            if group:
+                # Not returning here, because each mark must be accounted for,
+                # not just the first matching one.
+                matched_mark = True
+                if add:
+                    group.items.add(item)
+                elif item in group.items:
+                    group.items.remove(item)
+
+        # Make sure not to overcount the remainder
+        if matched_mark:
+            return
+
+        if self.remainder_max:
+            if add:
+                self.remainder += 1
+            else:
+                self.remainder -= 1
+
+
+def get_coro(task):
+    if sys_version_info >= (3, 8):
+        return task.get_coro()
+    else:
+        return task._coro
+
+
+def get_item_by_coro(task, item_by_coro):
+    if isinstance(task, asyncio.Task):
+        return item_by_coro[get_coro(task)]
+    else:
+        return item_by_coro[task]
+
+
 def _run_test_loop(tasks, session, run_tests):
     max_tasks = int(
         session.config.getoption("--max-asyncio-tasks")
         or session.config.getini("max_asyncio_tasks")
     )
 
+    mark_limits = MarkLimits()
+    mark_limits.update_config(session)
+
     loop = asyncio.new_event_loop()
     try:
-        task = run_tests(tasks, int(max_tasks))
+        task = run_tests(tasks, int(max_tasks), mark_limits)
         loop.run_until_complete(task)
     finally:
         loop.close()
@@ -218,15 +357,32 @@ def pytest_runtestloop(session):
         else:
             regular_items.append(item)
 
-    def get_coro(task):
-        if sys_version_info >= (3, 8):
-            return task.get_coro()
-        else:
-            return task._coro
+    async def run_tests(tasks, max_tasks: int, mark_limits):
+        sidelined_tasks = tasks
+        tasks = []
 
-    async def run_tests(tasks, max_tasks: int):
-        sidelined_tasks = tasks[max_tasks:]
-        tasks = tasks[:max_tasks]
+        def enqueue_tasks():
+            while len(tasks) < max_tasks:
+                remove_index = None
+
+                for index, task in enumerate(sidelined_tasks):
+                    item = get_item_by_coro(task, item_by_coro)
+                    if not mark_limits.would_exceed_max_marks(item):
+                        mark_limits.update_active_marks(item, add=True)
+                        tasks.append(task)
+                        remove_index = index
+                        break
+
+                if remove_index == None:
+                    # No available tasks were found, give up control.
+                    break
+
+                # Removing element from start/middle of the list is actually
+                # quite fast compared to iterating to the end of the list in
+                # the above loop.
+                sidelined_tasks.pop(remove_index)
+
+        enqueue_tasks()
 
         task_timeout = int(
             session.config.getoption("--asyncio-task-timeout")
@@ -244,17 +400,16 @@ def pytest_runtestloop(session):
             # Mark when the task was started
             earliest_enqueue_time = time.time()
             for task in tasks:
-                if isinstance(task, asyncio.Task):
-                    item = item_by_coro[get_coro(task)]
-                else:
-                    item = item_by_coro[task]
+                item = get_item_by_coro(task, item_by_coro)
                 if not hasattr(item, "enqueue_time"):
                     item.enqueue_time = time.time()
                 earliest_enqueue_time = min(item.enqueue_time, earliest_enqueue_time)
 
             time_to_wait = (time.time() - earliest_enqueue_time) - task_timeout
             done, pending = await asyncio.wait(
-                tasks, return_when=asyncio.FIRST_COMPLETED, timeout=min(30, int(time_to_wait))
+                tasks,
+                return_when=asyncio.FIRST_COMPLETED,
+                timeout=min(30, int(time_to_wait)),
             )
 
             # Cancel tasks that have taken too long
@@ -275,6 +430,7 @@ def pytest_runtestloop(session):
 
             for result in done:
                 item = item_by_coro[get_coro(result)]
+                mark_limits.update_active_marks(item, add=False)
 
                 # Flakey tests will be run again if they failed
                 # TODO: add retry count
@@ -299,9 +455,7 @@ def pytest_runtestloop(session):
 
                 completed.append(result)
 
-            if sidelined_tasks:
-                if len(tasks) < max_tasks:
-                    tasks.append(sidelined_tasks.pop(0))
+            enqueue_tasks()
 
         return completed
 

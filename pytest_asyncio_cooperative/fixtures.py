@@ -23,7 +23,7 @@ def _get_fixture(item, arg_name, fixture=None):
         if fixture:
             try:
                 item._request.param = item._pyfuncitem.callspec.params[fixture.argname]
-            except (AttributeError, KeyError) :
+            except (AttributeError, KeyError):
                 pass
 
         return item._request
@@ -62,16 +62,19 @@ async def fill_fixtures(item):
 
         if fixture.scope not in ["function", "module", "session"]:
             raise Exception(f"{fixture.scope} scope not supported")
-        
+
         fixtures.append(fixture)
         are_autouse.append(is_autouse)
-    
+
     # Fill fixtures concurrently
     fill_results = await asyncio.gather(
-        *(fill_fixture_fixtures(item._fixtureinfo, fixture, item) for fixture in fixtures)
+        *(
+            fill_fixture_fixtures(item._fixtureinfo, fixture, item)
+            for fixture in fixtures
+        )
     )
 
-    for ((value, extra_teardowns), is_autouse) in zip(fill_results, are_autouse):
+    for (value, extra_teardowns), is_autouse in zip(fill_results, are_autouse):
         teardowns.extend(extra_teardowns)
 
         if not is_autouse:
@@ -373,7 +376,9 @@ async def fill_fixture_fixtures(_fixtureinfo, fixture, item):
     ):
         return await _make_coroutine_fixture(_fixtureinfo, fixture, item)
 
-    elif inspect.isgeneratorfunction(fixture.func) or isinstance(fixture.func, CachedGen):
+    elif inspect.isgeneratorfunction(fixture.func) or isinstance(
+        fixture.func, CachedGen
+    ):
         return await _make_regular_generator_fixture(_fixtureinfo, fixture, item)
 
     elif inspect.isfunction(fixture.func):
