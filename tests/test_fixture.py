@@ -474,7 +474,7 @@ def test_shared_fixture_caching(testdir, scope, def_, ret, fail):
         import time
 
         called = False
-        @pytest.fixture(scope={scope})
+        @pytest.fixture(scope="{scope}")
         {def_} shared_fixture():
             global called
             if called:
