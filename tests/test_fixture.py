@@ -502,3 +502,40 @@ def test_shared_fixture_caching(testdir, scope, def_, ret, fail):
         # https://github.com/willemt/pytest-asyncio-cooperative/issues/42
     else:
         result.assert_outcomes(passed=2)
+
+
+def test_getting_fixture_from_closest_conftest(testdir):
+    testdir.makepyfile(
+        **{
+            "conftest": """
+           import pytest
+
+           @pytest.fixture
+           def some_fixture():
+               return "foo"
+            """,
+            "bar/conftest": """
+            import pytest
+
+           @pytest.fixture
+           def some_fixture():
+               return "bar"
+            """,
+            "test_foo": """
+            import pytest
+
+            @pytest.mark.asyncio_cooperative
+            def test_foo(some_fixture):
+                assert some_fixture == "foo"
+            """,
+            "bar/test_bar": """
+            import pytest
+
+            @pytest.mark.asyncio_cooperative
+            def test_bar(some_fixture):
+                assert some_fixture == "bar"
+            """,
+        }
+    )
+    result = testdir.runpytest()
+    result.assert_outcomes(passed=2)

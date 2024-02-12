@@ -33,9 +33,9 @@ def _get_fixture(item, arg_name, fixture=None):
 
     _fixtureinfo = item._fixtureinfo
     fixtures = sorted(
-        _fixtureinfo.name2fixturedefs[arg_name], key=lambda x: not x.has_location
+        _fixtureinfo.name2fixturedefs[arg_name], key=lambda x: x.has_location
     )
-    return fixtures[0]
+    return fixtures[-1]
 
 
 async def fill_fixtures(item):
