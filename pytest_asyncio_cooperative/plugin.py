@@ -36,7 +36,7 @@ def pytest_addoption(parser):
     parser.addini(
         "asyncio_task_timeout",
         "asyncio: number of seconds before a test will be cancelled (int)",
-        default=120,
+        default=600,
     )
 
 
