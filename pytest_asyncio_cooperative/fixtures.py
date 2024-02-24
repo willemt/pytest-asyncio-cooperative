@@ -381,7 +381,7 @@ async def fill_fixture_fixtures(_fixtureinfo, fixture, item):
     ):
         return await _make_regular_generator_fixture(_fixtureinfo, fixture, item)
 
-    elif inspect.isfunction(fixture.func):
+    elif inspect.isfunction(fixture.func) or inspect.ismethod(fixture.func):
         return await _make_regular_fixture(_fixtureinfo, fixture, item)
 
     else:

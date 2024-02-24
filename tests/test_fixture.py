@@ -539,3 +539,76 @@ def test_getting_fixture_from_closest_conftest(testdir):
     )
     result = testdir.runpytest()
     result.assert_outcomes(passed=2)
+
+
+def test_normal_method_fixture(testdir):
+    testdir.makepyfile(
+        """
+        import pytest
+        import asyncio
+
+        class TestDummy:
+            @pytest.fixture
+            def my_fixture(self):
+                return "YYY"
+
+            @pytest.mark.asyncio_cooperative
+            async def test_a(self, my_fixture):
+                await asyncio.sleep(2)
+                assert my_fixture == "YYY"
+    """
+    )
+
+    result = testdir.runpytest()
+
+    result.assert_outcomes(passed=1)
+
+
+def test_generator_method_fixture(testdir):
+    testdir.makepyfile(
+        """
+        import pytest
+        import asyncio
+
+        class TestDummy:
+            @pytest.fixture
+            def my_fixture(self):
+                yield "YYY"
+
+            @pytest.mark.asyncio_cooperative
+            async def test_a(self, my_fixture):
+                await asyncio.sleep(2)
+                assert my_fixture == "YYY"
+    """
+    )
+
+    result = testdir.runpytest()
+
+    result.assert_outcomes(passed=1)
+
+
+def test_method_fixture_take_priority(testdir):
+    testdir.makepyfile(
+        """
+        import pytest
+        import asyncio
+
+        @pytest.fixture
+        def my_fixture(self):
+            return "XXX"
+
+        class TestDummy:
+            @pytest.fixture
+            def my_fixture(self):
+                return "YYY"
+
+            @pytest.mark.asyncio_cooperative
+            async def test_a(self, my_fixture):
+                await asyncio.sleep(2)
+                assert my_fixture == "YYY"
+    """
+    )
+
+    result = testdir.runpytest()
+
+    result.assert_outcomes(passed=1)
