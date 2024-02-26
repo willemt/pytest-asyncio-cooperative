@@ -2,7 +2,13 @@ import asyncio
 import inspect
 from typing import List, Union
 
-from _pytest.fixtures import FixtureDef, FixtureRequest
+from _pytest.fixtures import (
+    FixtureDef,
+    FixtureRequest,
+    FuncFixtureInfo,
+    resolve_fixture_function,
+)
+from _pytest.nodes import Item
 
 
 class Ignore(Exception):
@@ -35,10 +41,11 @@ def _get_fixture(item, arg_name, fixture=None):
     fixtures = sorted(
         _fixtureinfo.name2fixturedefs[arg_name], key=lambda x: x.has_location
     )
+
     return fixtures[-1]
 
 
-async def fill_fixtures(item):
+async def fill_fixtures(item: Item):
     fixture_values = []
     teardowns = []
 
@@ -86,7 +93,9 @@ async def fill_fixtures(item):
     return fixture_values, teardowns
 
 
-async def _fill_fixture_fixtures(_fixtureinfo, fixture, item):
+async def _fill_fixture_fixtures(
+    _fixtureinfo: FuncFixtureInfo, fixture: FixtureDef, item: Item
+):
     values = []
     all_teardowns = []
     for arg_name in function_args(fixture.func):
@@ -252,7 +261,9 @@ class CachedAsyncGenByArguments(CachedAsyncGen):
         return gen(*args)
 
 
-async def _make_asyncgen_fixture(_fixtureinfo, fixture: FixtureDef, item):
+async def _make_asyncgen_fixture(
+    _fixtureinfo: FuncFixtureInfo, fixture: FixtureDef, item: Item
+):
     fixture_values, teardowns = await _fill_fixture_fixtures(
         _fixtureinfo, fixture, item
     )
@@ -280,7 +291,9 @@ async def _make_asyncgen_fixture(_fixtureinfo, fixture: FixtureDef, item):
     return value, [gen] + teardowns
 
 
-async def _make_coroutine_fixture(_fixtureinfo, fixture, item):
+async def _make_coroutine_fixture(
+    _fixtureinfo: FuncFixtureInfo, fixture: FixtureDef, item: Item
+):
     fixture_values, teardowns = await _fill_fixture_fixtures(
         _fixtureinfo, fixture, item
     )
@@ -308,7 +321,9 @@ async def _make_coroutine_fixture(_fixtureinfo, fixture, item):
     return value, teardowns
 
 
-async def _make_regular_generator_fixture(_fixtureinfo, fixture, item):
+async def _make_regular_generator_fixture(
+    _fixtureinfo: FuncFixtureInfo, fixture: FixtureDef, item: Item
+):
     fixture_values, teardowns = await _fill_fixture_fixtures(
         _fixtureinfo, fixture, item
     )
@@ -333,7 +348,9 @@ async def _make_regular_generator_fixture(_fixtureinfo, fixture, item):
     return gen.__next__(), [gen] + teardowns
 
 
-async def _make_regular_fixture(_fixtureinfo, fixture, item):
+async def _make_regular_fixture(
+    _fixtureinfo: FuncFixtureInfo, fixture: FixtureDef, item: Item
+):
     # FIXME: we should use more of pytest's fixture system
     fixture_values, teardowns = await _fill_fixture_fixtures(
         _fixtureinfo, fixture, item
@@ -362,11 +379,17 @@ async def _make_regular_fixture(_fixtureinfo, fixture, item):
     return value, teardowns
 
 
-async def fill_fixture_fixtures(_fixtureinfo, fixture, item):
+async def fill_fixture_fixtures(
+    _fixtureinfo: FuncFixtureInfo,
+    fixture: Union[FixtureDef, FixtureRequest],
+    item: Item,
+):
     if isinstance(fixture, FixtureRequest):
         return fixture, []
 
-    elif inspect.isasyncgenfunction(fixture.func) or isinstance(
+    fixture.func = resolve_fixture_function(fixture, item._request)
+
+    if inspect.isasyncgenfunction(fixture.func) or isinstance(
         fixture.func, CachedAsyncGen
     ):
         return await _make_asyncgen_fixture(_fixtureinfo, fixture, item)

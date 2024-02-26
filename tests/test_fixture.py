@@ -550,12 +550,14 @@ def test_normal_method_fixture(testdir):
         class TestDummy:
             @pytest.fixture
             def my_fixture(self):
-                return "YYY"
+                self.prop = "YYY"
+                return "ZZZ"
 
             @pytest.mark.asyncio_cooperative
             async def test_a(self, my_fixture):
                 await asyncio.sleep(2)
-                assert my_fixture == "YYY"
+                assert my_fixture == "ZZZ"
+                assert self.prop == "YYY"
     """
     )
 
@@ -573,12 +575,14 @@ def test_generator_method_fixture(testdir):
         class TestDummy:
             @pytest.fixture
             def my_fixture(self):
-                yield "YYY"
+                self.prop = "YYY"
+                yield "ZZZ"
 
             @pytest.mark.asyncio_cooperative
             async def test_a(self, my_fixture):
                 await asyncio.sleep(2)
-                assert my_fixture == "YYY"
+                assert my_fixture == "ZZZ"
+                assert self.prop == "YYY"
     """
     )
 
@@ -587,25 +591,25 @@ def test_generator_method_fixture(testdir):
     result.assert_outcomes(passed=1)
 
 
-def test_method_fixture_take_priority(testdir):
+def test_async_method_fixture(testdir):
     testdir.makepyfile(
         """
         import pytest
         import asyncio
 
-        @pytest.fixture
-        def my_fixture(self):
-            return "XXX"
-
         class TestDummy:
             @pytest.fixture
-            def my_fixture(self):
-                return "YYY"
+            async def my_fixture(self):
+                await asyncio.sleep(1)
+                self.prop = "YYY"
+                yield "ZZZ"
+                await asyncio.sleep(1)
 
             @pytest.mark.asyncio_cooperative
             async def test_a(self, my_fixture):
                 await asyncio.sleep(2)
-                assert my_fixture == "YYY"
+                assert my_fixture == "ZZZ"
+                assert self.prop == "YYY"
     """
     )
 
