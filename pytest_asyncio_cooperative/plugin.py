@@ -1,3 +1,4 @@
+import threading
 import asyncio
 import collections.abc
 import functools
@@ -290,7 +291,30 @@ def pytest_runtestloop(session):
                         item_by_coro[new_task] = item
                         continue
 
-                item.runtest = lambda: result.result()
+                # We need to change .runtest to a synchronous function for pytest
+                # however, if it is called again by retry libraries we need to rerun
+                # the test instead of retuning the previous result
+                def wrap_in_sync():
+                    def sync_wrapper():
+                        new_task = item_to_task(item)
+                        
+                        # We use a new thread because we can't block for an async function
+                        # in the same thread as the current running event loop, nor
+                        # we can nest event loops
+                        result = None
+                        def run_in_thread():
+                            nonlocal result
+                            result = asyncio.run(new_task)
+                        thread = threading.Thread(target=run_in_thread)
+                        thread.start()
+                        thread.join()
+                        return result
+
+                    item.runtest = sync_wrapper
+
+                    return result.result()
+
+                item.runtest = wrap_in_sync
 
                 item.ihook.pytest_runtest_protocol(item=item, nextitem=None)
 
