@@ -304,10 +304,17 @@ def pytest_runtestloop(session):
                         result = None
                         def run_in_thread():
                             nonlocal result
-                            result = asyncio.run(new_task)
+                            try:
+                                result = asyncio.run(new_task)
+                            except Exception as e:
+                                result = e
                         thread = threading.Thread(target=run_in_thread)
                         thread.start()
                         thread.join()
+
+                        if isinstance(result, Exception):
+                            raise result # type: ignore
+
                         return result
 
                     item.runtest = sync_wrapper
