@@ -616,3 +616,30 @@ def test_async_method_fixture(testdir):
     result = testdir.runpytest()
 
     result.assert_outcomes(passed=1)
+
+    
+def test_fixture_nested_exception(testdir):
+    testdir.makepyfile(
+        f"""
+        import pytest
+
+
+        @pytest.fixture(scope="module")
+        async def first():
+            return "first"
+
+
+        @pytest.fixture(scope="module")
+        async def second(first):
+            assert False
+            yield first
+
+
+        @pytest.mark.asyncio_cooperative
+        async def test_hello(second):
+            print("hello")
+        """
+    )
+
+    result = testdir.runpytest()
+    result.assert_outcomes(errors=0, failed=1)

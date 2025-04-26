@@ -168,8 +168,9 @@ class CachedGen(CachedFunctionBase):
     def completed(self, instance):
         self.instances.remove(instance)
 
-    def __call__(self, *args):
+    def __call__(self, *args, **kwargs):
         self.args = args
+        self.kwargs = kwargs
         instance = GenCounter(self)
         self.instances.add(instance)
         return instance
@@ -183,7 +184,7 @@ class CachedGen(CachedFunctionBase):
             raise self.exception
         else:
             try:
-                gen = self.wrapped_func(*self.args)
+                gen = self.wrapped_func(*self.args, **self.kwargs)
                 self.gen = gen
                 self.value = gen.__next__()
             except Exception as e:
@@ -218,8 +219,9 @@ class CachedAsyncGen(CachedFunctionBase):
     def completed(self, instance):
         self.instances.remove(instance)
 
-    def __call__(self, *args):
+    def __call__(self, *args, **kwargs):
         self.args = args
+        self.kwargs = kwargs
         instance = AsyncGenCounter(self)
         self.instances.add(instance)
         return instance
@@ -234,7 +236,7 @@ class CachedAsyncGen(CachedFunctionBase):
                 raise self.exception
             else:
                 try:
-                    gen = self.wrapped_func(*self.args)
+                    gen = self.wrapped_func(*self.args, **self.kwargs)
                     self.gen = gen
                     self.value = await gen.__anext__()
                 except Exception as e:
@@ -252,13 +254,14 @@ class CachedAsyncGenByArguments(CachedAsyncGen):
         super().__init__(wrapped_func)
         self.callers_by_args = {}
 
-    def __call__(self, *args):
+    def __call__(self, *args, **kwargs):
+        # TODO: Handle cases where args are the same, but kwargs differ
         if args in self.callers_by_args:
             gen = self.callers_by_args[args]
         else:
             gen = CachedAsyncGen(self.wrapped_func)
             self.callers_by_args[args] = gen
-        return gen(*args)
+        return gen(*args, **kwargs)
 
 
 async def _make_asyncgen_fixture(
