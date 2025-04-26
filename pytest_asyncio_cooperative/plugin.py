@@ -1,15 +1,14 @@
-import threading
 import asyncio
 import collections.abc
 import functools
 import inspect
+import threading
 import time
 from sys import version_info as sys_version_info
 
 import pytest
-
-from _pytest.runner import call_and_report
-from _pytest.skipping import Skip, evaluate_skip_marks
+from _pytest.skipping import Skip
+from _pytest.skipping import evaluate_skip_marks
 
 from .assertion import activate_assert_rewrite
 from .fixtures import fill_fixtures
@@ -297,23 +296,25 @@ def pytest_runtestloop(session):
                 def wrap_in_sync():
                     def sync_wrapper():
                         new_task = item_to_task(item)
-                        
+
                         # We use a new thread because we can't block for an async function
                         # in the same thread as the current running event loop, nor
                         # we can nest event loops
                         result = None
+
                         def run_in_thread():
                             nonlocal result
                             try:
                                 result = asyncio.run(new_task)
                             except Exception as e:
                                 result = e
+
                         thread = threading.Thread(target=run_in_thread)
                         thread.start()
                         thread.join()
 
                         if isinstance(result, Exception):
-                            raise result # type: ignore
+                            raise result  # type: ignore
 
                         return result
 

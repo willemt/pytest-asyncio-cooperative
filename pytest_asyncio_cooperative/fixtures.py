@@ -1,13 +1,12 @@
 import asyncio
 import inspect
-from typing import List, Union
+from typing import List
+from typing import Union
 
-from _pytest.fixtures import (
-    FixtureDef,
-    FixtureRequest,
-    FuncFixtureInfo,
-    resolve_fixture_function,
-)
+from _pytest.fixtures import FixtureDef
+from _pytest.fixtures import FixtureRequest
+from _pytest.fixtures import FuncFixtureInfo
+from _pytest.fixtures import resolve_fixture_function
 from _pytest.nodes import Item
 
 
