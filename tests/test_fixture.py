@@ -617,7 +617,7 @@ def test_async_method_fixture(testdir):
 
     result.assert_outcomes(passed=1)
 
-    
+
 def test_fixture_nested_exception(testdir):
     testdir.makepyfile(
         f"""
