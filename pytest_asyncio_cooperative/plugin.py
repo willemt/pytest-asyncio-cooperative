@@ -128,12 +128,11 @@ def _run_test_loop(tasks, session, run_tests):
         or session.config.getini("max_asyncio_tasks")
     )
 
-    loop = asyncio.new_event_loop()
+    task = run_tests(tasks, int(max_tasks))
     try:
-        task = run_tests(tasks, int(max_tasks))
-        loop.run_until_complete(task)
-    finally:
-        loop.close()
+        asyncio.run(task)
+    except KeyboardInterrupt:
+        pass
 
 
 @pytest.hookimpl(hookwrapper=True, tryfirst=True)
