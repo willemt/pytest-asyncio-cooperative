@@ -309,22 +309,24 @@ def pytest_runtestloop(session):
         item = item_by_coro[tasks[0]]
         activate_assert_rewrite(item)
 
+    if previous_collectonly:
+        return
+
     # Run the tests using cooperative multitasking
-    if not previous_collectonly:
-        _run_test_loop(tasks, session, run_tests)
+    _run_test_loop(tasks, session, run_tests)
 
-        # Run failed flakey tests
-        if flakes_to_retry:
-            _run_test_loop(flakes_to_retry, session, run_tests)
+    # Run failed flakey tests
+    if flakes_to_retry:
+        _run_test_loop(flakes_to_retry, session, run_tests)
 
-        # Run synchronous tests
-        session.items = regular_items
-        for i, item in enumerate(session.items):
-            nextitem = session.items[i + 1] if i + 1 < len(session.items) else None
-            item.config.hook.pytest_runtest_protocol(item=item, nextitem=nextitem)
-            if session.shouldfail:
-                raise session.Failed(session.shouldfail)
-            if session.shouldstop:
-                raise session.Interrupted(session.shouldstop)
+    # Run synchronous tests
+    session.items = regular_items
+    for i, item in enumerate(session.items):
+        nextitem = session.items[i + 1] if i + 1 < len(session.items) else None
+        item.config.hook.pytest_runtest_protocol(item=item, nextitem=nextitem)
+        if session.shouldfail:
+            raise session.Failed(session.shouldfail)
+        if session.shouldstop:
+            raise session.Interrupted(session.shouldstop)
 
-        return True
+    return True
