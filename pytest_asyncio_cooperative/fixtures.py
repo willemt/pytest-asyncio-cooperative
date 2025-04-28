@@ -1,13 +1,19 @@
 import asyncio
 import inspect
+from typing import Any
 from typing import List
 from typing import Union
+from typing import Tuple
 
 from _pytest.fixtures import FixtureDef
 from _pytest.fixtures import FixtureRequest
 from _pytest.fixtures import FuncFixtureInfo
 from _pytest.fixtures import resolve_fixture_function
 from _pytest.nodes import Item
+
+
+FixtureValue = Any
+Teardown = callable
 
 
 class Ignore(Exception):
@@ -44,10 +50,7 @@ def _get_fixture(item, arg_name, fixture=None):
     return fixtures[-1]
 
 
-async def fill_fixtures(item: Item):
-    fixture_values = []
-    teardowns = []
-
+async def fill_fixtures(item: Item) -> Tuple[List[FixtureValue], List[Teardown]]:
     # Important to maintain order of fixtures specified by function
     fixture_names: List[str] = list(function_args(item.function))
 
@@ -80,6 +83,9 @@ async def fill_fixtures(item: Item):
         )
     )
 
+    fixture_values = []
+    teardowns = []
+
     for (value, extra_teardowns), is_autouse in zip(fill_results, are_autouse):
         teardowns.extend(extra_teardowns)
 
@@ -94,7 +100,7 @@ async def fill_fixtures(item: Item):
 
 async def _fill_fixture_fixtures(
     _fixtureinfo: FuncFixtureInfo, fixture: FixtureDef, item: Item
-):
+) -> Tuple[List[FixtureValue], List[Teardown]]:
     values = []
     all_teardowns = []
     for arg_name in function_args(fixture.func):
@@ -160,9 +166,10 @@ class CachedGen(CachedFunctionBase):
     """Save the result of the 1st yield.
     Yield 2nd yield when all callers have yielded."""
 
-    def __init__(self, wrapped_func):
+    def __init__(self, wrapped_func, scope: str):
         super().__init__(wrapped_func)
         self.instances = set()
+        self.scope = scope
 
     def completed(self, instance):
         self.instances.remove(instance)
@@ -211,9 +218,10 @@ class CachedAsyncGen(CachedFunctionBase):
     """Save the result of the 1st yield.
     Yield 2nd yield when all callers have yielded."""
 
-    def __init__(self, wrapped_func):
+    def __init__(self, wrapped_func, scope: str):
         super().__init__(wrapped_func)
         self.instances = set()
+        self.scope = scope
 
     def completed(self, instance):
         self.instances.remove(instance)
@@ -249,8 +257,8 @@ class CachedAsyncGenByArguments(CachedAsyncGen):
     Yield 2nd yield when all callers have yielded.
     We cache based off arguments."""
 
-    def __init__(self, wrapped_func):
-        super().__init__(wrapped_func)
+    def __init__(self, wrapped_func, scope: str):
+        super().__init__(wrapped_func, scope)
         self.callers_by_args = {}
 
     def __call__(self, *args, **kwargs):
@@ -258,14 +266,14 @@ class CachedAsyncGenByArguments(CachedAsyncGen):
         if args in self.callers_by_args:
             gen = self.callers_by_args[args]
         else:
-            gen = CachedAsyncGen(self.wrapped_func)
+            gen = CachedAsyncGen(self.wrapped_func, self.scope)
             self.callers_by_args[args] = gen
         return gen(*args, **kwargs)
 
 
 async def _make_asyncgen_fixture(
     _fixtureinfo: FuncFixtureInfo, fixture: FixtureDef, item: Item
-):
+) -> Tuple[FixtureValue, List[Teardown]]:
     fixture_values, teardowns = await _fill_fixture_fixtures(
         _fixtureinfo, fixture, item
     )
@@ -274,17 +282,17 @@ async def _make_asyncgen_fixture(
 
     if fixture.scope in ["module", "session"]:
         if not isinstance(fixture.func, CachedAsyncGenByArguments):
-            fixture.func = CachedAsyncGenByArguments(fixture.func)
+            fixture.func = CachedAsyncGenByArguments(fixture.func, fixture.scope)
         func = fixture.func
 
     elif fixture.scope in ["function"]:
         try:
             func = item._asyncio_cooperative_cached_functions[fixture]
         except AttributeError:
-            func = CachedAsyncGen(fixture.func)
+            func = CachedAsyncGen(fixture.func, fixture.scope)
             item._asyncio_cooperative_cached_functions = {fixture: func}
         except KeyError:
-            func = CachedAsyncGen(fixture.func)
+            func = CachedAsyncGen(fixture.func, fixture.scope)
 
         item._asyncio_cooperative_cached_functions[fixture] = func
 
@@ -295,7 +303,9 @@ async def _make_asyncgen_fixture(
 
 async def _make_coroutine_fixture(
     _fixtureinfo: FuncFixtureInfo, fixture: FixtureDef, item: Item
-):
+) -> Tuple[FixtureValue, List[Teardown]]:
+    # Fixtures that don't yield (thus don't add teardowns)
+
     fixture_values, teardowns = await _fill_fixture_fixtures(
         _fixtureinfo, fixture, item
     )
@@ -325,26 +335,28 @@ async def _make_coroutine_fixture(
 
 async def _make_regular_generator_fixture(
     _fixtureinfo: FuncFixtureInfo, fixture: FixtureDef, item: Item
-):
+) -> Tuple[FixtureValue, List[Teardown]]:
     fixture_values, teardowns = await _fill_fixture_fixtures(
         _fixtureinfo, fixture, item
     )
 
     if fixture.scope in ["module", "session"]:
         if not isinstance(fixture.func, CachedGen):
-            fixture.func = CachedGen(fixture.func)
+            fixture.func = CachedGen(fixture.func, fixture.scope)
         func = fixture.func
 
     elif fixture.scope in ["function"]:
         try:
             func = item._asyncio_cooperative_cached_functions[fixture]
         except AttributeError:
-            func = CachedGen(fixture.func)
+            func = CachedGen(fixture.func, fixture.scope)
             item._asyncio_cooperative_cached_functions = {fixture: func}
         except KeyError:
-            func = CachedGen(fixture.func)
+            func = CachedGen(fixture.func, fixture.scope)
 
         item._asyncio_cooperative_cached_functions[fixture] = func
+    else:
+        raise Exception("unknown scope type")
 
     gen = func(*fixture_values)
     return gen.__next__(), [gen] + teardowns
@@ -352,7 +364,10 @@ async def _make_regular_generator_fixture(
 
 async def _make_regular_fixture(
     _fixtureinfo: FuncFixtureInfo, fixture: FixtureDef, item: Item
-):
+) -> Tuple[FixtureValue, List[Teardown]]:
+    # Regular fixtures don't yield and are synchronous.
+    # They don't add teardowns
+
     # FIXME: we should use more of pytest's fixture system
     fixture_values, teardowns = await _fill_fixture_fixtures(
         _fixtureinfo, fixture, item
@@ -385,7 +400,7 @@ async def fill_fixture_fixtures(
     _fixtureinfo: FuncFixtureInfo,
     fixture: Union[FixtureDef, FixtureRequest],
     item: Item,
-):
+) -> Tuple[FixtureValue, List[Teardown]]:
     if isinstance(fixture, FixtureRequest):
         return fixture, []
 
@@ -394,23 +409,21 @@ async def fill_fixture_fixtures(
     if inspect.isasyncgenfunction(fixture.func) or isinstance(
         fixture.func, CachedAsyncGen
     ):
-        return await _make_asyncgen_fixture(_fixtureinfo, fixture, item)
-
+        func = _make_asyncgen_fixture
     elif inspect.iscoroutinefunction(fixture.func) or isinstance(
         fixture.func, CachedFunction
     ):
-        return await _make_coroutine_fixture(_fixtureinfo, fixture, item)
-
+        func = _make_coroutine_fixture
     elif inspect.isgeneratorfunction(fixture.func) or isinstance(
         fixture.func, CachedGen
     ):
-        return await _make_regular_generator_fixture(_fixtureinfo, fixture, item)
-
+        func = _make_regular_generator_fixture
     elif inspect.isfunction(fixture.func) or inspect.ismethod(fixture.func):
-        return await _make_regular_fixture(_fixtureinfo, fixture, item)
-
+        func = _make_regular_fixture
     else:
         raise Exception(
             f"Something is strange about the fixture '{fixture.func.__name__}'.\n"
             f"Please create an issue with reproducible sample on github."
         )
+
+    return await func(_fixtureinfo, fixture, item)
