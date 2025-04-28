@@ -137,6 +137,39 @@ def cancel_task(task, now, item):
         task.cancel()
 
 
+def wrap_in_sync(item, result):
+    def outer():
+        def sync_wrapper():
+            new_task = item_to_task(item)
+
+            # We use a new thread because we can't block for an async function
+            # in the same thread as the current running event loop, nor
+            # we can nest event loops
+            result = None
+
+            def run_in_thread():
+                nonlocal result
+                try:
+                    result = asyncio.run(new_task)
+                except Exception as e:
+                    result = e
+
+            thread = threading.Thread(target=run_in_thread)
+            thread.start()
+            thread.join()
+
+            if isinstance(result, Exception):
+                raise result  # type: ignore
+
+            return result
+
+        item.runtest = sync_wrapper
+
+        return result.result()
+
+    return outer
+
+
 async def run_tests(tasks, max_tasks: int, session, item_by_coro):
     flakes_to_retry = []
 
@@ -202,36 +235,7 @@ async def run_tests(tasks, max_tasks: int, session, item_by_coro):
             # We need to change .runtest to a synchronous function for pytest
             # however, if it is called again by retry libraries we need to rerun
             # the test instead of retuning the previous result
-            def wrap_in_sync():
-                def sync_wrapper():
-                    new_task = item_to_task(item)
-
-                    # We use a new thread because we can't block for an async function
-                    # in the same thread as the current running event loop, nor
-                    # we can nest event loops
-                    result = None
-
-                    def run_in_thread():
-                        nonlocal result
-                        try:
-                            result = asyncio.run(new_task)
-                        except Exception as e:
-                            result = e
-
-                    thread = threading.Thread(target=run_in_thread)
-                    thread.start()
-                    thread.join()
-
-                    if isinstance(result, Exception):
-                        raise result  # type: ignore
-
-                    return result
-
-                item.runtest = sync_wrapper
-
-                return result.result()
-
-            item.runtest = wrap_in_sync
+            item.runtest = wrap_in_sync(item, result)
 
             item.ihook.pytest_runtest_protocol(item=item, nextitem=None)
 
