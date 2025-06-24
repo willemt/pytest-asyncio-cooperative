@@ -497,7 +497,10 @@ def test_shared_fixture_caching(testdir, scope, def_, ret, fail):
     result = testdir.runpytest()
 
     if fail:
-        result.assert_outcomes(failed=2)
+        if ret == "yield":
+            result.assert_outcomes(errors=2)
+        else:
+            result.assert_outcomes(failed=2)
         # Should be errors instead of failures
         # https://github.com/willemt/pytest-asyncio-cooperative/issues/42
     else:
