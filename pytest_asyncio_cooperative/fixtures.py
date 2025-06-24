@@ -1,5 +1,6 @@
 import asyncio
 import inspect
+import types
 from typing import List
 from typing import Union
 
@@ -113,6 +114,11 @@ class CachedFunctionBase(object):
     def __init__(self, wrapped_func):
         self.lock = asyncio.Lock()
         self.wrapped_func = wrapped_func
+
+        # Trying to fool pytest's use of inspect.isgeneratorfunction
+        self.__defaults__ = getattr(wrapped_func, "__defaults__", None)
+        self.__kwdefaults__ = getattr(wrapped_func, "__kwdefaults__", None)
+        self.__annotations__ = getattr(wrapped_func, "__annotations__", {})
 
     @property
     def __code__(self):
