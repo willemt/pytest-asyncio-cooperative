@@ -1,3 +1,5 @@
+import sys
+
 import pytest
 
 
@@ -463,6 +465,7 @@ def test_concurrent_function_fixture_filling(testdir):
     result.assert_outcomes(passed=1)
 
 
+@pytest.mark.skipif(sys.version_info < (3, 10), reason="Requires Python 3.10+")
 @pytest.mark.parametrize("scope", ["module", "session"])
 @pytest.mark.parametrize("def_", ["def", "async def"])
 @pytest.mark.parametrize("ret", ["return", "yield"])
@@ -497,10 +500,52 @@ def test_shared_fixture_caching(testdir, scope, def_, ret, fail):
     result = testdir.runpytest()
 
     if fail:
-        if ret == "yield":
+        if ret == "yield" and def_ == "def":
             result.assert_outcomes(errors=2)
         else:
             result.assert_outcomes(failed=2)
+        # Should be errors instead of failures
+        # https://github.com/willemt/pytest-asyncio-cooperative/issues/42
+    else:
+        result.assert_outcomes(passed=2)
+
+
+@pytest.mark.skipif(sys.version_info > (3, 9), reason="Legacy behaviour")
+@pytest.mark.parametrize("scope", ["module", "session"])
+@pytest.mark.parametrize("def_", ["def", "async def"])
+@pytest.mark.parametrize("ret", ["return", "yield"])
+@pytest.mark.parametrize("fail", [False, True])
+def test_shared_fixture_caching_pre_py3_10(testdir, scope, def_, ret, fail):
+    testdir.makepyfile(
+        f"""
+        import pytest
+        import time
+
+        called = False
+        @pytest.fixture(scope="{scope}")
+        {def_} shared_fixture():
+            global called
+            if called:
+                assert {fail}
+            else:
+                called = True
+                assert not {fail}
+            {ret}
+
+        @pytest.mark.asyncio_cooperative
+        async def test_a(shared_fixture):
+            assert True
+
+        @pytest.mark.asyncio_cooperative
+        async def test_b(shared_fixture):
+            assert True
+    """
+    )
+
+    result = testdir.runpytest()
+
+    if fail:
+        result.assert_outcomes(failed=2)
         # Should be errors instead of failures
         # https://github.com/willemt/pytest-asyncio-cooperative/issues/42
     else:

@@ -1,3 +1,9 @@
+import sys
+
+import pytest
+
+
+@pytest.mark.skipif(sys.version_info < (3, 10), reason="Requires Python 3.10+")
 def test_session_fixture_with_exception(testdir):
     testdir.makepyfile(
         """
